@@ -46,11 +46,21 @@ symbol_instance= GetSymbolTrading()
 #Modelo IA
 def mse(y_true, y_pred):
     return tf.keras.losses.mean_squared_error(y_true, y_pred)
-# Ruta relativa al archivo .h5
-ruta_modelo = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'Aegis-IA0003.h5')
+# Ruta relativa al archivo .keras
+ruta_modelo = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'Aegis-IA0003.keras')
 
 # Cargar el modelo
 modelo = tf.keras.models.load_model(ruta_modelo, custom_objects={'mse': mse})
+
+# Rutas de los archivos de predicciones, tabla Q y log (ajustadas a los nuevos nombres)
+ruta_predictions = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'Aegis-IA0003.keras_predictions.npy')
+ruta_q_table = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'Aegis-IA0003.keras_q_table.csv')
+ruta_trade_log = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'Aegis-IA0003.keras_trade_log.npy')
+
+# Cargar los archivos correspondientes
+predictions = np.load(ruta_predictions)
+q_table = pd.read_csv(ruta_q_table)
+trade_log = np.load(ruta_trade_log)
 
 
 # Load translations
