@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar sesión en AegisIA</title>
+    <link rel="stylesheet" href="/static/css/stylesLogin.css" />
+    <!-- <link rel="stylesheet" href="styles.css"> -->
+    <!-- <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet"> -->
+</head>
+<body class="light-theme">
+    <div class="grid-container">
+        <div class="image-section">
+            <img src="static/assets/imagen1.jpeg" alt="Escudo de seguridad de AegisIA" class="security-image">
+        </div>
+        <div class="form-section">
+            <header class="app-header">
+                <div class="header-content">
+                    <nav class="header-nav">
+                        <div class="logo-container">
+                            <a href="https://www.aegisia.com" class="logo-link">
+                                <svg class="logo-icon" viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
+                                    <text x="10" y="30" class="aegis-text">Aegis</text>
+                                    <text x="120" y="30" class="ia-text">IA</text>
+                                </svg>
+                            </a>
+                        </div>
+                        <div class="header-actions">
+                            <div class="language-selector">
+                            </div>
+                            <a href="https://www.aegisia.com/sign-up" class="signup-button">Crear una cuenta</a>
+                        </div>
+                    </nav>
+                </div>
+            </header>
+
+            <div class="login-container">
+                <div class="login-form-wrapper">
+                    <div class="form-container">
+                        <h1 class="form-title">Inicia sesión en AegisIA</h1>
+                        <form class="login-form">
+                            <div class="form-group">
+                                <div class="input-container error">
+                                    <div class="input-wrapper">
+                                        <input 
+                                        class="input-field" 
+                                        type="email" 
+                                        name="email" 
+                                        pattern="[a-zA-Z0-9]+@[a-zA-Z0-9]+.[a-zA-Z]{2,}"   
+                                        title="Ingresa un email válido (ejemplo: nombre@dominio.com)" 
+                                        required>
+                                    </div>
+                                </div>
+                                
+                                <div class="input-container error">
+                                    <div class="input-wrapper">                                       
+                                        <input  class="input-field"
+                                                type="password" 
+                                                id="password" 
+                                                name="password" 
+                                                pattern="^(?=(.*[A-Z]){2,})(?=(.*[a-z]){2,})(?=(.*\d){3,})(?=(.*[.]){1,})[A-Za-z\d.]{8,}$"
+                                                title="La contraseña debe tener: mínimo 8 caracteres, 2 mayúsculas, 2 minúsculas, 3 números y 1 punto"
+                                                required>
+                                        <button type="button" id="mostarContra" class="password-toggle" aria-label="Mostrar contraseña">
+                                            👁️
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <p class="forgot-links">
+                                    ¿Has olvidado la <a href="/forgot-password" class="link">contraseña</a> o el 
+                                    <a href="/forgot-username" class="link">nombre de usuario</a>?
+                                </p>
+                                
+                                <input type="submit" class="submit-button" >Continuar</input>
+                                
+                                <p class="help-text">
+                                    ¿Necesita ayuda? <a href="https://support.aegisia.com" class="link" target="_blank">Contacta con el equipo de Atención al cliente</a>
+                                </p>
+
+                                
+                            </div>
+
+                            
+
+                            <div class="login-form-response none">
+                                <p>Los datos han sido enviados</p>
+                            </div>
+                        </form>
+                    </div>
+
+                    
+                    
+                    <div class="footer-links">
+                        <a href="https://www.aegisia.com/legal/privacy" class="footer-link" target="_blank">Aviso de privacidad</a>
+                        <a href="https://www.aegisia.com/legal" class="footer-link" target="_blank">Términos de servicio</a>
+                    </div>
+                </div>
+               
+            </div>
+            
+        </div>
+        
+    </div>
+    <!-- <div class="login-form-loader none">
+        <div class="loader-content">
+            <img src="loading-spinner.svg" alt="Cargando...">
+            <p>Procesando tu solicitud...</p>
+        </div>
+    </div> -->
+    <div class="login-form-loader none">
+        <div class="loader-content">
+            <div class="loader-spinner"></div>
+            <p>Procesando tu solicitud...</p>
+        </div>
+    </div>
+    <script src="/static/js/validaciones_formulario.js" type="module"></script>
+    
+</body>
+</html>

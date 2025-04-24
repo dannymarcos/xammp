@@ -1,0 +1,119 @@
+#tradingview_chart {
+    width: 100%;
+    height: 500px;
+  }
+  
+  .chart-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  
+  .chart-controls select,
+  .chart-controls button {
+    padding: 0.5rem;
+    margin-right: 0.5rem;
+    border-radius: 0.25rem;
+    border: 1px solid #ccc;
+  }
+  
+  .trading-controls button {
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+  }
+  
+  .trading-controls button:hover {
+    opacity: 0.8;
+  }
+  
+  .placeholder-area {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    padding: 20px;
+    margin-top: 20px;
+  }
+
+  /* ******************************************************* */
+
+  #historic-data {
+    margin-top: 2rem;
+  }
+  #historic-data .thead{
+    width: 100%;
+  }
+
+  #historic-data .tbody{
+    width: 100%;
+  }
+  
+  
+  #historic-data h2 {
+    color: var(--text-color);
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    text-align: center;
+  }
+  
+  #historic-data .table-content {
+    max-height: 400px; /* Ajusta esto según tus necesidades */
+    overflow-y: auto;
+    position: relative;
+  }
+
+  #historic-data table {
+    width: 100%;
+    table-layout: fixed; /* Fija el ancho de las columnas */
+    border-collapse: collapse;
+    background-color: #ffffff;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  #historic-data .table-header,
+  #historic-data .table-content {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #ffffff;
+    border-radius: 0.5rem;
+    table-layout: fixed;
+    /* overflow: hidden; */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  }
+  
+  /* #historic-data .table-header {
+    margin-bottom: -1px; 
+  } */
+  
+  #historic-data th,
+  #historic-data td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    word-wrap: break-word; 
+  }
+  
+  #historic-data th {
+    background-color: #f7fafc;
+    font-weight: 600;
+    color: #4a5568;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  
+  #historic-data .table-content tbody tr:hover {
+    background-color: #f0f4f8;
+  }
+  
+  #historic-data .table-content tbody tr:last-child td {
+    border-bottom: none;
+  }
+  
+  
+  
+
+  /* ********************************************************* */
