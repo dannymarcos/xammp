@@ -17,6 +17,7 @@ from app.viewmodels.api.spot.KrakenSpotApiGetAccountBalance import KrakenSpotApi
 from app.models.users import User
 from app.models.create_db import db
 from werkzeug.security import check_password_hash
+from flask_login import login_user, logout_user, login_required, current_user # Import Flask-Login functions
 import logging
 import requests
 import pandas as pd
@@ -88,6 +89,7 @@ routes_bp = Blueprint("routes", __name__)
 # Initialize Telegram Bot with a valid token 
 
 @routes_bp.route("/")
+@login_required
 def home():
     """Home page route"""
     try:
@@ -125,6 +127,7 @@ def home():
         return render_template("home.html", error=str(e),get_translated_text=get_translated_text)
 
 @routes_bp.route("/finances")
+@login_required
 def finances_route():
     """Finances page route"""
     try:
@@ -148,7 +151,8 @@ def finances_route():
 #         # Get withdrawals
 #         withdrawals = Withdrawal.query.filter_by(user_id=user.id).all()
         
-        return render_template("finances.html", error=str(e),get_translated_text=get_translated_text)
+        # Removed erroneous 'error=str(e)' from try block
+        return render_template("finances.html", get_translated_text=get_translated_text) 
 #             total_invested=total_invested,
 #             total_generated=total_generated,
 #             daily_percentage=daily_percentage,
@@ -159,9 +163,11 @@ def finances_route():
 #         )
     except Exception as e:
         logger.error(f"Error in finances route: {e}")
-        return render_template("finances.html", error=str(e),get_translated_text=get_translated_text)
+        # Use a generic error message instead of potentially undefined 'e'
+        return render_template("finances.html", error="An error occurred loading finances.", get_translated_text=get_translated_text)
 
 @routes_bp.route("/request_withdrawal", methods=["POST"])
+@login_required
 def request_withdrawal():
     """Handle withdrawal requests"""
     try:
@@ -227,6 +233,7 @@ def request_withdrawal():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @routes_bp.route("/confirm_withdrawal")
+@login_required
 def confirm_withdrawal():
     """Withdrawal confirmation page"""
     try:
@@ -285,60 +292,114 @@ def send_withdrawal_email(user, amount, currency, wallet_address):
     #     logger.error(f"Error sending withdrawal email: {e}")
 
 
-@routes_bp.route("/login", methods=['GET', 'POST'])
-def login():
+@routes_bp.route("/register", methods=['GET', 'POST'])
+def register():
     if request.method == 'POST':
         try:
-            email = request.form.get('email')
-            password = request.form.get('password')
+            data = request.json
 
-            print(f"Datos recibidos - Email: {email}, Password: {password}")
+            if not data:
+                return jsonify({"error": "Invalid or missing JSON data"}), 400
 
-            # Obtener todos los usuarios
-            users = User.query.all()
-        
-            for user in users:
-                print(f"Email: {user.email}, Nombre: {user.full_name}, Contraseña Hash: {user.password_hash}")
-                print(user.check_password(password))  # Debería devolver True
+            email = data.get('email')
+            password = data.get('password')
+            full_name = data.get('full_name')
+
+            if not email or not password or not full_name:
+                 return jsonify({"error": "Missing required fields (email, password, full_name)"}), 400
+            
+            # Check if email already exists
+            existing_user = User.query.filter_by(email=email).first()
+            if existing_user:
+                return jsonify({"error": "Email already exists"}), 400
+
+            # Hash the password before storing
+            hashed_password = generate_password_hash(password)
+
+            user = User(email=email, password_hash=hashed_password, full_name=full_name)
+            db.session.add(user)
+            db.session.commit()
+
+            logger.info(f"New user registered: {email}")
+            return jsonify({"status": "success", "message": "Registration successful"})
+
+        except Exception as e:
+            db.session.rollback() # Rollback in case of error
+            logger.error(f"Error registering user: {e}")
+            # Return a generic error for the user
+            return jsonify({"error": "An internal error occurred during registration"}), 500
+
+    # Render the registration template for GET requests
+    return render_template('register.html')
+
+@routes_bp.route("/login", methods=['GET', 'POST'])
+def login():
+    # Redirect authenticated users away from the login page
+    if current_user.is_authenticated:
+         return redirect("/")
+
+    if request.method == 'POST':
+        try:
+            data = request.json
+
+            if not data:
+                 data = request.form # Use form data as fallback
+
+            email = data.get('email')
+            password = data.get('password')
 
             if not email or not password:
                 return jsonify({
                     "status": "error",
-                    "message": "Email y contraseña son requeridos"
+                    "message": "Email and password are required",
+                    "error": "Missing required fields (email, password)"
                 }), 400
-            
-            # Buscar usuario en la base de datos
+
+            # Buscar usuario en la base de datos by email
             user = User.query.filter_by(email=email).first()
 
-            # Buscar contraseña en la base de datos
-           # password2 = User.query.filter_by(password_hash = password).first()
-
-            print(f"User: {user}")
-            #print(f"Password: {password2}")
-
-            # print(user.check_password(password))  # Debería devolver True
-            
-            if not user or not user.check_password(password):
+            # Check if user exists AND the password is correct (using the check_password method)
+            if user is None or not user.check_password(password):
                 return jsonify({
                     "status": "error",
-                    "message": "Credenciales inválidas"
+                    "message": "Invalid credentials",
+                    "error": "Invalid email or password"
                 }), 401
-            
-            # Login exitoso
+
+            # Login exitoso - Use Flask-Login to manage the session
+            login_user(user) # Log the user in
+            logger.info(f"User {user.email} logged in successfully.")
+
+            # Return success and a redirect URL (frontend handles redirection)
             return jsonify({
                 "status": "success",
-                "message": "Login exitoso",
-                "redirect": "/"
+                "message": "Login successful",
+                "redirect": "/" # Or wherever you want to redirect after login
             })
-            
+
         except Exception as e:
-            logger.error(f"Error en login: {e}")
+            # No db writes happened here usually, rollback is less critical but good practice
+            db.session.rollback()
+            logger.error(f"Error during login: {e}")
+            # Return a generic error message
             return jsonify({
                 "status": "error",
-                "message": "Error interno del servidor"
+                "message": "An internal server error occurred",
+                "error": str(e)
             }), 500
-    
+
+    # Render the login template for GET requests
     return render_template("login.html")
+
+@routes_bp.route("/logout")
+@login_required  # Ensure only logged-in users can logout
+def logout():
+    """Log the user out."""
+    user_email = current_user.email # Get email before logging out
+    logout_user()
+    logger.info(f"User {user_email} logged out successfully.")
+    # Redirect to login page after logout
+    return redirect(url_for('routes.login'))
 
 # Initialize Telegram bot
 if TELEGRAM_BOT_TOKEN:
@@ -407,6 +468,7 @@ def submit_support_request():
         return jsonify({"status": "error", "message": str(e)}), 500
         
 @routes_bp.route("/settings/password", methods=["GET", "POST"])
+@login_required
 def settings_password_route():
     """Settings password page route"""
     try:
@@ -441,6 +503,7 @@ def settings_password_route():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @routes_bp.route("/profile", methods=["GET", "POST"])
+@login_required
 def profile_route():
     """Profile page route"""
     # try:
@@ -517,11 +580,13 @@ def update_profile():
         return jsonify({"error": str(e)}), 500
 
 @routes_bp.route("/settings")
+@login_required
 def settings_route():
     """Settings page route"""
     return render_template("under_construction.html", page_name="Settings",get_translated_text=get_translated_text)
 
 @routes_bp.route("/classes")
+@login_required
 def classes_route():
     """Classes page route"""
     try:
@@ -534,6 +599,7 @@ def classes_route():
         return render_template("classes.html", error="Error loading classes",get_translated_text=get_translated_text)
 
 @routes_bp.route("/settings/2fa")
+@login_required
 def settings_2fa_route():
     """Settings 2FA page route"""
     return render_template("under_construction.html", page_name="Enable 2FA",get_translated_text=get_translated_text)
@@ -578,6 +644,7 @@ def change_language():
         return jsonify({"error": str(e)}), 500
     
 @routes_bp.route("/get_account_balance", methods =["POST"])
+@login_required
 def get_account_balance():
     """Get account balance"""
     try:
@@ -620,6 +687,7 @@ def get_account_balance():
 
 # Obtener metodo de trading por defecto
 @routes_bp.route("/get_method_trading")
+@login_required
 def get_method_trading():
     """Get methos of trading"""
     try:
@@ -632,6 +700,7 @@ def get_method_trading():
     
 
 @routes_bp.route("/get_symbol_trading")
+@login_required
 def get_symbol_trading():
     """Get symbol of trading"""
 
@@ -644,6 +713,7 @@ def get_symbol_trading():
         return jsonify({"error": str(e)}), 500
 
 @routes_bp.route("/get_cryptos", methods=['POST'])
+@login_required
 def get_cryptos():
     """Get available cryptocurrencies"""
     try:
@@ -679,6 +749,7 @@ def get_cryptos():
         return jsonify({"error": str(e)}), 500
     
 @routes_bp.route("/add_order", methods=["POST"])
+@login_required
 def add_order():
     """
     Recibe datos desde el front (por fetch) para crear una orden en Kraken.
@@ -892,6 +963,7 @@ def request_teleclass_access():
     #     return jsonify({"status": "error", "message": str(e)}), 500
 
 @routes_bp.route("/settings/wallet", methods=["GET", "POST"])
+@login_required
 def settings_wallet_route():
     """Settings wallet page route"""
     try:
@@ -919,7 +991,8 @@ def settings_wallet_route():
             
     #     # GET request - render wallet settings page
     #     user = User.query.filter_by(email='test@example.com').first()
-        return render_template("settings/wallet.html", user=user)
+        # Use current_user from Flask-Login instead of undefined 'user'
+        return render_template("settings/wallet.html", user=current_user, get_translated_text=get_translated_text) 
         
     except Exception as e:
         logger.error(f"Error in wallet settings: {e}")

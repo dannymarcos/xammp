@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro en AegisIA</title>
+    <link rel="stylesheet" href="/static/css/stylesLogin.css">
+</head>
+<body class="light-theme">
+    <div class="grid-container">
+        <div class="image-section">
+            <img src="static/assets/imagen1.jpeg" alt="Escudo de seguridad de AegisIA" class="security-image">
+        </div>
+        <div class="form-section">
+            <header class="app-header">
+                <div class="header-content">
+                    <nav class="header-nav">
+                        <div class="logo-container">
+                            <a href="/" class="logo-link">
+                                <svg class="logo-icon" viewBox="0 0 200 40" xmlns="http://www.w3.org/2000/svg">
+                                    <text x="10" y="30" class="aegis-text">Aegis</text>
+                                    <text x="120" y="30" class="ia-text">IA</text>
+                                </svg>
+                            </a>
+                        </div>
+                        <div class="header-actions">
+                            <div class="language-selector">
+                            </div>
+                            <a href="/login" class="signup-button">Iniciar sesión</a>
+                        </div>
+                    </nav>
+                </div>
+            </header>
+
+            <div class="login-container">
+                <div class="login-form-wrapper">
+                    <div class="form-container">
+                        <h1 class="form-title">Crea tu cuenta en AegisIA</h1>
+                        <form class="login-form" id="registerForm">
+                            <div class="form-group">
+                                <div class="input-container">
+                                    <div class="input-wrapper">
+                                        <input class="input-field" 
+                                               type="text" 
+                                               name="full_name"
+                                               id="full_name" 
+                                               placeholder="Nombre completo"
+                                               required>
+                                    </div>
+                                </div>
+                                
+                                <div class="input-container">
+                                    <div class="input-wrapper">
+                                        <input class="input-field" 
+                                               type="email" 
+                                               name="email" 
+                                               id="email"
+                                               pattern="[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]{2,}"   
+                                               title="Ingresa un email válido (ejemplo: nombre@dominio.com)"
+                                               placeholder="Correo electrónico"
+                                               required>
+                                    </div>
+                                </div>
+                                
+                                <div class="input-container">
+                                    <div class="input-wrapper">
+                                        <input class="input-field"
+                                               type="password" 
+                                               id="password" 
+                                               name="password" 
+                                              
+                                               placeholder="Contraseña"
+                                               required>
+                                        <button type="button" id="mostarContra" class="password-toggle" aria-label="Mostrar contraseña">
+                                            👁️
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <input type="submit" class="submit-button" value="Registrarse">
+                                
+                                <p class="help-text">
+                                    ¿Ya tienes una cuenta? <a href="/login" class="link">Inicia sesión</a>
+                                </p>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="footer-links">
+                        <a href="/legal/privacy" class="footer-link">Aviso de privacidad</a>
+                        <a href="/legal" class="footer-link">Términos de servicio</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="login-form-loader none">
+        <div class="loader-content">
+            <div class="loader-spinner"></div>
+            <p>Procesando tu registro...</p>
+        </div>
+    </div>
+
+
+<script>
+    document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const full_name = document.getElementById('full_name').value;
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const body = JSON.stringify({ full_name, email, password});
+        console.log({body})
+        
+        try {
+            document.querySelector('.login-form-loader').classList.remove('none');
+            const response = await fetch(`{{ url_for('routes.register') }}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: body
+            });
+            
+            const result = await response.json();
+            if (result.status === 'success') {
+                window.location.href = '/';
+            } else {
+                alert(result.error || 'Error en el registro');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error al conectar con el servidor');
+        } finally {
+            document.querySelector('.login-form-loader').classList.add('none');
+        }
+    });
+</script>
+</body>
+</html>

@@ -14,28 +14,29 @@ export default function loginFormValidations(){
         $form.style.opacity = "0.7";
 
         try {
-            const formData = new FormData($form);
-            console.log("Form: ",$form);
-            console.log("Form Data: ",formData);
+            const email = $form.email.value;
+            const password = $form.password.value;
 
-            // Convertir a objeto (opcional)
-            const data = Object.fromEntries(formData);
-
-            console.log("formData: ", data)
+            if (!email || !password) {
+                throw new Error("Todos los campos son obligatorios");
+            }
+        
             
             const response = await fetch('/login', {
                 method: 'POST',
-                headers: {
-                    'Accept': 'application/json'
+                 headers: {
+                    'Content-Type': 'application/json',
                 },
-                body: formData
+                body: JSON.stringify({email, password})
             });
 
             const result = await response.json();
             
+            console.log({result})
             if (!response.ok) {
                 throw new Error(result.message || 'Error en el servidor');
             }
+
             
             // Redirección exitosa
             window.location.href = result.redirect || '/';

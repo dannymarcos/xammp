@@ -5,6 +5,11 @@
         <a href="/health" class="app-title">Aegis-IA</a>
       </div>
       <div class="hidden md:block ml-auto">
+        <div>
+          <button>
+            <a class="btn btn-danger" href="{{ url_for('routes.logout')}}">Log out</a>
+          </button>
+        </div>
         {% include 'partials/_mobile_header.html' %}
        
       </div>

@@ -30,7 +30,7 @@
                         <div class="header-actions">
                             <div class="language-selector">
                             </div>
-                            <a href="https://www.aegisia.com/sign-up" class="signup-button">Crear una cuenta</a>
+                            <a href="{{ url_for('routes.register')}}" class="signup-button">Crear una cuenta</a>
                         </div>
                     </nav>
                 </div>
@@ -60,8 +60,6 @@
                                                 type="password" 
                                                 id="password" 
                                                 name="password" 
-                                                pattern="^(?=(.*[A-Z]){2,})(?=(.*[a-z]){2,})(?=(.*\d){3,})(?=(.*[.]){1,})[A-Za-z\d.]{8,}$"
-                                                title="La contraseña debe tener: mínimo 8 caracteres, 2 mayúsculas, 2 minúsculas, 3 números y 1 punto"
                                                 required>
                                         <button type="button" id="mostarContra" class="password-toggle" aria-label="Mostrar contraseña">
                                             👁️
