@@ -341,20 +341,21 @@ def login():
     return render_template("login.html")
 
 # Initialize Telegram bot
-bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
-TELEGRAM_BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start=welcome"
-TELEGRAM_START_COMMAND = '/start'
-TELEGRAM_WELCOME_MESSAGE = (
-    "🛡️ ¡Bienvenido al Soporte de Aegis-IA!\n\n"
-    "Por favor, selecciona una opción:\n\n"
-    "1️⃣ Problemas técnicos\n"
-    "2️⃣ Problemas con inversiones\n" 
-    "3️⃣ Problemas con retiros\n"
-    "4️⃣ Otros problemas\n\n"
-    "O escribe tu consulta directamente y nuestro equipo te ayudará lo antes posible.\n\n"
-    "🔒 Seguridad & Desarrollo\n"
-    "⏰ Tiempo de respuesta: 24 horas"
-)
+if TELEGRAM_BOT_TOKEN:
+    bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
+    TELEGRAM_BOT_LINK = f"https://t.me/{TELEGRAM_BOT_USERNAME}?start=welcome"
+    TELEGRAM_START_COMMAND = '/start'
+    TELEGRAM_WELCOME_MESSAGE = (
+        "🛡️ ¡Bienvenido al Soporte de Aegis-IA!\n\n"
+        "Por favor, selecciona una opción:\n\n"
+        "1️⃣ Problemas técnicos\n"
+        "2️⃣ Problemas con inversiones\n" 
+        "3️⃣ Problemas con retiros\n"
+        "4️⃣ Otros problemas\n\n"
+        "O escribe tu consulta directamente y nuestro equipo te ayudará lo antes posible.\n\n"
+        "🔒 Seguridad & Desarrollo\n"
+        "⏰ Tiempo de respuesta: 24 horas"
+    )
 
 @routes_bp.route("/submit_support_request", methods=["POST"])
 def submit_support_request():

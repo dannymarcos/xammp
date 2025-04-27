@@ -1,0 +1,33 @@
+[project]
+name = "xammp"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "joselatines",email = "joselatinestranslator@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+    "flask (==3.0.1)",
+    "tensorflow>=2.19.0,<3.0.0",
+    "flask-sqlalchemy>=3.1.1,<4.0.0",
+    "numpy>=1.26.0,<2.2.0",
+    "sqlalchemy (>=2.0.40,<3.0.0)",
+    "werkzeug>=3.0.0,<4.0.0",
+    "flask-cors (>=5.0.1,<6.0.0)",
+    "flask-static-compress (>=1.0.3,<2.0.0)",
+    "gunicorn (>=23.0.0,<24.0.0)",
+    "krakenex (>=2.2.2,<3.0.0)",
+    "pandas (>=2.2.3,<3.0.0)",
+    "python-telegram-bot (>=22.0,<23.0)",
+    "requests (>=2.32.3,<3.0.0)",
+    "scikit-learn (>=1.6.1,<2.0.0)",
+    "ta (>=0.11.0,<0.12.0)",
+    "werkzeug (==3.0.1)",
+    "dotenv (>=0.9.9,<0.10.0)",
+    "pymysql (>=1.1.1,<2.0.0)"  
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
