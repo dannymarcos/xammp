@@ -3,8 +3,8 @@ export default class TvWidget {
         this.currentTradingSymbol = "";
     }
 
-    loadTradingSymbol = async function() {
-        let symbolToUse;
+    loadTradingSymbol = async function(symbolToUse) {
+        // let symbolToUse;
 
         // Verificar si hay un símbolo guardado en localStorage
         const storedSymbol = localStorage.getItem('symbol');
@@ -19,6 +19,13 @@ export default class TvWidget {
             // console.log(`Símbolo por defecto desde el backend: ${symbolToUse}`);
         }
 
+        // check if it is in valid format (without :)
+        if (symbolToUse.includes(':')) {
+            symbolToUse = symbolToUse.split(':')[0];
+        }
+
+        console.log(`Símbolo a usar: ${symbolToUse}`);
+
         // Asegurarse de que symbolToUse no es undefined
         if (symbolToUse) {
             this.initializeWidget(symbolToUse);
@@ -28,7 +35,7 @@ export default class TvWidget {
     }
 
     initializeWidget = function(symbol) {
-       let widget = window.tradingViewWidget = new TradingView.widget({
+       this.widget = new TradingView.widget({
             "width": "100%",
             "height": 500,
             "symbol": `${symbol}`,
@@ -55,20 +62,20 @@ export default class TvWidget {
         });
 
         this.currentTradingSymbol = symbol;
+        window.tradingViewWidget = this.widget; // Also store globally for debugging
+    }
 
+    updateChartSymbol = function(symbol) {
+        if (this.widget) {
+            this.loadTradingSymbol(symbol);
+        }
     }
 
     handleSymbolChange = function(newSymbol) {
-        // console.log(`Nuevo símbolo seleccionado: ${newSymbol}`);
-
-        // Actualizar el símbolo actual en la instancia de la clase
         this.currentTradingSymbol = newSymbol;
-
-        // Guardar el símbolo en localStorage
         this.saveCurrentTradingSymbol(localStorage, "symbol", newSymbol);
-
-        // Enviar el símbolo actualizado al backend
         this.updateTradingSymbol(newSymbol);
+        this.updateChartSymbol(newSymbol);
     }
 
     updateTradingSymbol = async function(symbol) {

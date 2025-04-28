@@ -8,6 +8,8 @@ export default async function get_cryptos(method,boton,cryptoList,cryptoSearch) 
     const ls = localStorage;
     let metodo = method;
 
+    if (!$fetchCryptos) return
+
     d.addEventListener("click", async e => {
 
         // console.log(`Estamos dentro del evento clic del dom en el archivo get_cryptos: ${e.target}`);
@@ -36,6 +38,7 @@ export default async function get_cryptos(method,boton,cryptoList,cryptoSearch) 
                         body: JSON.stringify({trading_mode: metodo})
                     });
                     let json = await response.json();
+                    console.log({json})
 
                     // console.log(`Respuesta desde /get_cryptos en routes.py:`, json);
 

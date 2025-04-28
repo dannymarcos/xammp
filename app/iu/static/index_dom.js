@@ -16,9 +16,10 @@ const d = document;
 const ls = localStorage;
 
 d.addEventListener("DOMContentLoaded", async (e)=>{
-    const tvWidget = new TvWidget();
+    window.tvWidget = new TvWidget();
     const inversion = new InversionTron();
     const link_ref = new ReferralLink();
+    window.get_historical_data = get_historical_data;
     
     let method = ls.getItem('method');
 
@@ -49,6 +50,11 @@ d.addEventListener("DOMContentLoaded", async (e)=>{
             symbol = 'XBTUSD';
             ls.setItem('symbol',symbol);
         }
+    }
+
+    // check if it is in valid format (without :)
+    if (symbol.includes(':')) {
+        symbol = symbol.replace(':', '');
     }
     console.log("Estamos dentro de la funcion index_dom, y el simbolo es 1: ",symbol)
 

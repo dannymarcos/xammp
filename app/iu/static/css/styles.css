@@ -193,7 +193,7 @@ body {
 .list-none {
   display: block;
   z-index: 800;
-  position: absolute;
+  /* position: absolute; */
   background-color: var(--header-bg);
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 
@@ -286,6 +286,7 @@ body {
   padding: 0.5rem;
   max-height: 300px;
   overflow-y: auto;
+  width: 100%;
 }
 
 #crypto-list li {

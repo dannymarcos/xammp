@@ -11,6 +11,8 @@ export default async function get_historical_data(symbol) {
     }
     // console.log("Estamos dentro de la funcion get_historical_data_1", symbol);
     try {
+        $h2.textContent = "Cargando datos para el par " + symbol;
+        $historicTableBody.innerHTML = `<h2>Cargando...</h2>`;
         // Obtener los datos históricos desde la API de Kraken
         const response = await fetch(`/fetch_historical_data?symbol=${symbol}`);
         const json = await response.json();
@@ -19,6 +21,7 @@ export default async function get_historical_data(symbol) {
         // Verificar si hay errores en la respuesta
         if (json.error && json.error.length > 0) {
             console.error('Error en la respuesta de la API de Kraken:', json.error);
+            $historicTableBody.innerHTML = `<h2 class="text-red-500 font-bold">${json.error}</h2>`;
             return;
         }
 

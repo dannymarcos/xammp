@@ -22,7 +22,7 @@ class KrakenFuturesAPI:
 
             self.data = response.json()
             if "error" in self.data and self.data["error"]:
-                logger.error(f"Kraken API error: {data['error']}")
+                logger.error(f"Kraken API error: {self.data['error']}")
                 return {"error": str(self.data["error"])}, 500
 
         except Exception as e:
