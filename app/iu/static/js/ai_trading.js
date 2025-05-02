@@ -205,6 +205,7 @@ function stopAITrading() {
 // Event listeners for buttons
 document.addEventListener('DOMContentLoaded', () => {
     const aiTradingButton = document.getElementById('ai-trading-button');
+    return console.warn("AI trading deprecated");
     if (aiTradingButton) {
         aiTradingButton.addEventListener('click', () => {
             if (isAITrading) {

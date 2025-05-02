@@ -1,0 +1,178 @@
+
+   
+<!-- Trading Controls Component -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <!-- Top Tabs (Spot, Cross, etc.) -->
+        <ul class="nav nav-tabs mb-3" id="tradeTypeTab" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="spot-tab" data-bs-toggle="tab" data-bs-target="#spot-tab-pane" type="button" role="tab" aria-controls="spot-tab-pane" aria-selected="true">{{ _('Spot') }}</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="cross-tab" data-bs-toggle="tab" data-bs-target="#cross-tab-pane" type="button" role="tab" aria-controls="cross-tab-pane" aria-selected="false">{{ _('Cross') }}</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="isolated-tab" data-bs-toggle="tab" data-bs-target="#isolated-tab-pane" type="button" role="tab" aria-controls="isolated-tab-pane" aria-selected="false">{{ _('Isolated') }}</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="grid-tab" data-bs-toggle="tab" data-bs-target="#grid-tab-pane" type="button" role="tab" aria-controls="grid-tab-pane" aria-selected="false">{{ _('Grid') }}</button>
+            </li>
+        </ul>
+        <div class="tab-content" id="tradeTypeTabContent">
+            <div class="tab-pane fade show active" id="spot-tab-pane" role="tabpanel" aria-labelledby="spot-tab" tabindex="0">
+
+                <!-- Sub Tabs (Limit, Market, etc.) & Other Options -->
+                <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
+                    <ul class="nav nav-pills nav-pills-sm mb-2 mb-md-0"> <!-- Using nav-pills for the button-like look -->
+                        <li class="nav-item me-1">
+                            <a class="nav-link active small py-1 px-2" href="#">{{ _('Market') }}</a>
+                        </li>
+                        <li class="nav-item me-1">
+                            <a class="nav-link small py-1 px-2" href="#">{{ _('Limit') }}</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link small py-1 px-2" href="#">{{ _('Stop Limit') }}</a>
+                        </li>
+                    </ul>
+                    <div class="d-flex align-items-center gap-3 text-muted small">
+                        <span>% {{ _('Fee Level') }}</span>
+                        <span><i class="bi bi-gear"></i> {{ _('Auto-Invest') }}</span> <!-- Added an icon example -->
+                        <span><i class="bi bi-credit-card"></i> {{ _('Buy with EUR') }}</span>
+                    </div>
+                </div>
+
+                <!-- Buy/Sell Forms -->
+                <div class="row g-4">
+                    <!-- Buy Section -->
+                    <div class="col-lg-6">
+                        <div class="border rounded p-3">
+                            <div class="mb-3">
+                                <label for="buy-price" class="form-label small">{{ _('Price') }}</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" id="buy-price" value="{{ _('Market Price') }}" disabled>
+                                    <span id="buy-price-currency" class="input-group-text">DUMMY USDT</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="buy-total" class="form-label small">{{ _('Total') }}</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control" id="buy-total" placeholder="0.00">
+                                    <select class="form-select flex-grow-0 w-auto" id="buy-currency">
+                                        <option selected>USDT</option>
+                                        <option>EUR</option>
+                                        <option>USD</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Slider Placeholder -->
+                           <!--  <div class="mb-3 pt-2">
+                                <input type="range" class="form-range" min="0" max="100" step="25" id="buy-slider" value="0">
+                                <div class="d-flex justify-content-between small text-muted mt-1">
+                                    <span>0%</span>
+                                    <span>25%</span>
+                                    <span>50%</span>
+                                    <span>75%</span>
+                                    <span>100%</span>
+                                </div>
+                            </div> -->
+
+                            <!-- Info Section -->
+                            <div class="small text-muted border-top pt-3 mt-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>{{ _('Available') }}</span>
+                                    <span id="buy-avbl" class="font-monospace">6.71869529 DUMMY USDT <button class="btn btn-link btn-sm p-0 ms-1">+</button></span>
+                                </div>
+                                <!-- Extra info -->
+                                <!-- <div class="d-flex justify-content-between mb-1">
+                                    <span>{{ _('Max Buy') }}</span>
+                                    <span class="font-monospace">0.00007 DUMMY BTC</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ _('Est. Fee') }}</span>
+                                    <span class="font-monospace">0.00000003 DUMMY BTC</span>
+                                </div> -->
+                            </div>
+
+
+                            <!-- Buy Button -->
+                            <div class="d-grid mt-4">
+                                <button type="button" class="btn btn-success">
+                                    {{ _('Buy DUMMY BTC') }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sell Section -->
+                    <div class="col-lg-6">
+                        <div class="border rounded p-3">
+                            <div class="mb-3">
+                                <label for="sell-price" class="form-label small">{{ _('Price') }}</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control" id="sell-price" value="{{ _('Market Price') }}" disabled>
+                                    <span id="sell-price-currency" class="input-group-text">DUMMY USDT</span>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="sell-amount" class="form-label small">{{ _('Amount') }}</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="number" class="form-control" id="sell-amount" placeholder="0.000000">
+                                    <select class="form-select flex-grow-0 w-auto" id="sell-currency">
+                                        <option selected>DUMMY BTC</option>
+                                        <option>ETH</option>
+                                        <option>SOL</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Slider Placeholder -->
+                            <!-- <div class="mb-3 pt-2">
+                                <input type="range" class="form-range" min="0" max="100" step="25" id="sell-slider" value="0">
+                                <div class="d-flex justify-content-between small text-muted mt-1">
+                                    <span>0%</span>
+                                    <span>25%</span>
+                                    <span>50%</span>
+                                    <span>75%</span>
+                                    <span>100%</span>
+                                </div>
+                            </div> -->
+
+                            <!-- Info Section -->
+                            <div class="small text-muted border-top pt-3 mt-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>{{ _('Available') }}</span>
+                                    <span id="sell-avbl" class="font-monospace">0.00000000 DUMMY BTC <button class="btn btn-link btn-sm p-0 ms-1">+</button></span>
+                                </div>
+                                <!-- Extra info -->
+                               <!--  <div class="d-flex justify-content-between mb-1">
+                                    <span>{{ _('Max Sell') }}</span>
+                                    <span class="font-monospace">0.00000000 DUMMY BTC</span>
+                                </div>
+                                <div class="d-flex justify-content-between">
+                                    <span>{{ _('Est. Fee') }}</span>
+                                    <span class="font-monospace">0 DUMMY USDT</span>
+                                </div> -->
+                            </div>
+
+                            <!-- Sell Button -->
+                            <div class="d-grid mt-4">
+                                <button type="button" class="btn btn-danger">
+                                    {{ _('Sell DUMMY BTC') }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div> <!-- End Buy/Sell Row -->
+            </div> <!-- End Spot Tab Pane -->
+
+            <!-- Placeholder Panes for other tabs (Cross, Isolated, Grid) -->
+            <div class="tab-pane fade" id="cross-tab-pane" role="tabpanel" aria-labelledby="cross-tab" tabindex="0">{{ _('Cross Trading UI Placeholder') }}</div>
+            <div class="tab-pane fade" id="isolated-tab-pane" role="tabpanel" aria-labelledby="isolated-tab" tabindex="0">{{ _('Isolated Trading UI Placeholder') }}</div>
+            <div class="tab-pane fade" id="grid-tab-pane" role="tabpanel" aria-labelledby="grid-tab" tabindex="0">{{ _('Grid Trading UI Placeholder') }}</div>
+        </div> <!-- End Tab Content -->
+    </div> <!-- End Card Body -->
+</div> <!-- End Card -->
+
+<!-- Add component-specific JavaScript -->
+<script src="{{ url_for('static', filename='js/partials/trading_component.js') }}"></script>

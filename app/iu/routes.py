@@ -1,44 +1,70 @@
 
 
+import json
+import logging
 import os
-from flask import current_app, session, jsonify, request, Blueprint, render_template, url_for, redirect
-from werkzeug.utils import secure_filename
+import secrets
+import smtplib  # For sending emails
+import time  # Importar time desde la biblioteca estándar de Python
+import traceback
+from datetime import datetime
+
 # from app.models.shared_models import  ReferralLink, Withdrawal, Strategy, logger
 from email.mime.text import MIMEText
-import secrets
-import time # Importar time desde la biblioteca estándar de Python
-import smtplib  # For sending emails
+
+import numpy as np
+import pandas as pd
+import requests
 import telegram
-from werkzeug.security import generate_password_hash
-from app.viewmodels.api.spot.KrakenSpotAPITicker import KrakenSpotAPI
+import tensorflow as tf
+from dotenv import load_dotenv
+from flask import (
+    Blueprint,
+    current_app,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from flask_login import (  # Import Flask-Login functions
+    current_user,
+    login_required,
+    login_user,
+    logout_user,
+)
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
+
+from app.Aplicacion import db
+from app.models.create_db import db
+from app.models.users import User, update_user_bot_status
+from app.models.trades import get_all_trades_from_user
+
 from app.viewmodels.api.futures.KrakenFuturesAPI import KrakenFuturesAPI
 from app.viewmodels.api.spot.KrakenSpotApiAddOrder import KrakenSpotApiAddOrder
-from app.viewmodels.api.spot.KrakenSpotApiGetAccountBalance import KrakenSpotApiGetAccountBalance
-from app.models.users import User
-from app.models.create_db import db
-from werkzeug.security import check_password_hash
-from flask_login import login_user, logout_user, login_required, current_user # Import Flask-Login functions
-import logging
-import requests
-import pandas as pd
-import json
-from app.Aplicacion import db
-import numpy as np
-import tensorflow as tf
+from app.viewmodels.api.spot.KrakenSpotApiGetAccountBalance import (
+    KrakenSpotApiGetAccountBalance,
+)
+from app.viewmodels.api.spot.KrakenSpotAPITicker import KrakenSpotAPI
 from app.viewmodels.services.GetMethodTrading import GetMethodTrading
 from app.viewmodels.services.GetSymbolTrading import GetSymbolTrading
-from dotenv import load_dotenv
+from app.viewmodels.services.TradingBotManager import TradingBotManager
+
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+from app.viewmodels.api.kraken.KrakenAPIFutures import KrakenAPIFutures
+from app.viewmodels.api.kraken.KrakenAPISpot import KrakenAPISpot
 
 #Iniciamos las variables de entorno desde el archivo .env
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_BOT_USERNAME = os.getenv("TELEGRAM_BOT_USERNAME")
-API_KEY_KRAKEN = os.getenv("API_KEY_KRAKEN")
-API_SECRET_KRAKEN = os.getenv("API_SECRET_KRAKEN")
+API_KEY_KRAKEN = os.getenv("KRAKEN_API_KEY")
+API_SECRET_KRAKEN = os.getenv("KRAKEN_API_SECRET")
 
 # Clases
 method_instance= GetMethodTrading()
@@ -125,6 +151,215 @@ def home():
     except Exception as e:
         logger.error(f"Error in home route: {e}")
         return render_template("home.html", error=str(e),get_translated_text=get_translated_text)
+
+@routes_bp.route("/bot/start_bot_trading", methods=['POST'])
+def start_bot_trading():
+    """
+    Start a trading bot for the current user
+    
+    Expects a JSON payload with:
+    - symbol: Trading pair (e.g., BTC/USD)
+    - timeframe: Chart timeframe (e.g., 1h)
+    - amount: Trade amount
+    - interval: Trading interval in seconds
+    - trading_mode: 'spot' or 'futures'
+    
+    Returns:
+    - 200 OK if bot started successfully
+    - 400 Bad Request if invalid parameters or bot already running
+    - 500 Internal Server Error if an error occurs
+    """
+    try:
+        data = request.get_json()
+        user_id = current_user.id
+        current_bot_status = None
+        
+        # Validate required parameters
+        if not data:
+            logger.error(f"No JSON data provided in request")
+            current_bot_status = "error"
+            update_user_bot_status(user_id, current_bot_status)
+            return jsonify({"error": "No data provided", "bot_status": current_bot_status}), 400
+        
+        # Get trading mode
+        trading_mode = data.get("trading_mode")
+        if trading_mode not in ['spot', 'futures']:
+            logger.error(f"Invalid trading mode: {trading_mode}")
+            current_bot_status = "error"
+            update_user_bot_status(user_id, current_bot_status)
+            return jsonify({"error": "Invalid trading mode", "bot_status": current_bot_status}), 400
+        
+        # Create configuration for the bot
+        config = {
+            'trading_pair': data.get('symbol', 'BTC/USD'),
+            'timeframe': data.get('timeframe', '1h'),
+            'trade_amount': float(data.get('amount', 0.01)),
+            'trading_mode': trading_mode,
+            'max_active_trades': data.get('max_active_trades', 1),
+            'stop_loss_pct': data.get('stop_loss_pct', 0.02),
+            'take_profit_pct': data.get('take_profit_pct', 0.04)
+        }
+        
+        # Initialize the appropriate Kraken API client
+        if trading_mode == 'spot':
+            kraken_api = KrakenAPISpot(user_id)
+        else:  # futures
+            kraken_api = KrakenAPIFutures(user_id)
+        
+        logger.info(f"Starting bot for user {user_id} with config: {config}")
+        
+        # Start the bot
+        if TradingBotManager.start_bot(user_id, kraken_api, config):
+            # Update bot_status in the database
+            current_bot_status = "running"
+            update_user_bot_status(user_id, current_bot_status)
+            logger.info(f"Bot started successfully for user {user_id}")
+            return jsonify({"status": "Bot started", "bot_status": current_bot_status}), 200
+        else:
+            current_bot_status = "error"
+            update_user_bot_status(user_id, current_bot_status)
+            logger.error(f"Failed to start bot for user {user_id}")
+            return jsonify({"error": "Failed to start bot", "bot_status": current_bot_status}), 400
+    
+    except Exception as e:
+        logger.error(f"Error starting bot for user {current_user.id}: {str(e)}")
+        logger.debug(f"Error details: {traceback.format_exc()}")
+        current_bot_status = "error"
+        update_user_bot_status(current_user.id, current_bot_status)
+        return jsonify({"error": str(e), "bot_status": current_bot_status}), 500
+    
+@routes_bp.route("/bot/stop_bot_trading", methods=['POST'])
+@login_required
+def stop_bot_trading():
+    """
+    Stop a trading bot for the current user
+    
+    Returns:
+    - 200 OK if bot stopped successfully
+    - 404 Not Found if no active bot found
+    - 500 Internal Server Error if an error occurs
+    """
+    try:
+        user_id = current_user.id
+        logger.info(f"Attempting to stop bot for user {user_id}")
+        
+        # Get current bot status
+        current_bot_status = User.query.filter_by(id=user_id).first().bot_status
+        
+        # Stop the bot
+        if TradingBotManager.stop_bot(user_id):
+            # Update bot_status in the database
+            current_bot_status = "stopped"
+            update_user_bot_status(user_id, current_bot_status)
+            logger.info(f"Bot stopped successfully for user {user_id}")
+            return jsonify({"status": "Bot stopped", "bot_status": current_bot_status}), 200
+        else:
+            current_bot_status = "error"
+            update_user_bot_status(user_id, current_bot_status)
+            logger.warning(f"No active bot found for user {user_id}")
+            return jsonify({"error": "No active bot found", "bot_status": current_bot_status}), 404
+    
+    except Exception as e:
+        logger.error(f"Error stopping bot for user {current_user.id}: {str(e)}")
+        logger.debug(f"Error details: {traceback.format_exc()}")
+        current_bot_status = "error"
+        update_user_bot_status(current_user.id, current_bot_status)
+        return jsonify({"error": str(e), "bot_status": current_bot_status}), 500
+    
+
+@routes_bp.route("/bot/status")
+@login_required
+def get_bot_status():
+    """
+    Get the current status of the trading bot for the current user
+    
+    Returns:
+    - 200 OK with the bot status
+    - 500 Internal Server Error if an error occurs
+    """
+    try:
+        user_id = current_user.id
+        logger.debug(f"Getting bot status for user {user_id}")
+        
+        # Get the bot status from the database
+        user = User.query.filter_by(id=user_id).first()
+        if not user:
+            logger.error(f"User {user_id} not found")
+            return jsonify({"bot_status": "error"}), 404
+        
+        # Get the bot status
+        bot_status = user.bot_status
+        
+        # Check if the bot is actually running
+        is_running = TradingBotManager.is_bot_running(user_id)
+        
+        # If the database says the bot is running but it's not actually running,
+        # update the database to reflect the correct status
+        if bot_status == "running" and not is_running:
+            logger.warning(f"Bot status mismatch for user {user_id}: database says 'running' but bot is not running")
+            bot_status = "stopped"
+            update_user_bot_status(user_id, bot_status)
+        
+        logger.debug(f"Bot status for user {user_id}: {bot_status}")
+        return jsonify({"bot_status": bot_status}), 200
+    
+    except Exception as e:
+        logger.error(f"Error getting bot status for user {current_user.id}: {str(e)}")
+        logger.debug(f"Error details: {traceback.format_exc()}")
+        return jsonify({"bot_status": "error", "error": str(e)}), 500
+
+@routes_bp.route("/trades")
+@login_required
+def get_trades():
+    """
+    Get the trade history for the current user
+    
+    Returns:
+    - 200 OK with the trade history
+    - 500 Internal Server Error if an error occurs
+    """
+    try:
+        user_id = current_user.id
+        logger.debug(f"Getting trade history for user {user_id}")
+        
+        # Get the trade history from the database
+        trades = get_all_trades_from_user(user_id)
+        
+        # Check if the bot is running and get any active trades
+        if TradingBotManager.is_bot_running(user_id):
+            logger.debug(f"Bot is running for user {user_id}, checking for active trades")
+            
+            # Get the bot instance
+            bot = TradingBotManager._bots.get(user_id)
+            
+            # If the bot has active trades, add them to the trade history
+            if bot and hasattr(bot, 'active_trades') and bot.active_trades:
+                logger.debug(f"Found {len(bot.active_trades)} active trades for user {user_id}")
+                
+                # Convert active trades to the same format as the trade history
+                for active_trade in bot.active_trades:
+                    # Only add if it's not already in the trade history
+                    if not any(t.get('id') == active_trade.get('id') for t in trades):
+                        trade_data = {
+                            'id': active_trade.get('id', 'unknown'),
+                            'by': 'Bot',
+                            'timestamp': active_trade.get('time', datetime.now()).isoformat() if isinstance(active_trade.get('time'), datetime) else datetime.now().isoformat(),
+                            'order_direction': active_trade.get('side', 'unknown'),
+                            'symbol': bot.config.trading_pair if hasattr(bot, 'config') else 'unknown',
+                            'price': active_trade.get('price', 0),
+                            'volume': bot.config.trade_amount if hasattr(bot, 'config') else 0,
+                            'status': 'active'
+                        }
+                        trades.append(trade_data)
+        
+        logger.debug(f"Returning {len(trades)} trades for user {user_id}")
+        return jsonify({"trades": trades}), 200
+    
+    except Exception as e:
+        logger.error(f"Error getting trades for user {current_user.id}: {str(e)}")
+        logger.debug(f"Error details: {traceback.format_exc()}")
+        return jsonify({"error": str(e), "trades": []}), 500
+
 
 @routes_bp.route("/finances")
 @login_required
@@ -681,7 +916,7 @@ def get_account_balance():
             return jsonify({"error": "Futures trading not implemented yet"}), 501
         
     except Exception as e:
-        logger.error(f"Error getting balance: {e}")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
@@ -742,12 +977,30 @@ def get_cryptos():
             cryptos, status = spot_client.get_symbol_and_ultimate_price_trade()
             if status != 200:
                 return jsonify(cryptos), status
-            
         return jsonify(cryptos)
     except Exception as e:
         logger.error(f"Error getting cryptocurrencies: {e}")
         return jsonify({"error": str(e)}), 500
     
+#for single crypto with symbol
+@routes_bp.route("/get_symbol_price", methods=['GET'])
+@login_required
+def get_symbol_price():
+    """Get available cryptocurrencies"""
+    try:
+        symbol = request.args.get('symbol')
+        spot_client = KrakenAPISpot(user_id=current_user.id)
+        data = spot_client.get_symbol_price(symbol)
+        print(data)
+        if data[1] != 200:
+            return jsonify(data[0]), data[1]
+        
+        return jsonify(data[0])
+
+    except Exception as e:
+        logger.error(f"Error getting cryptocurrencies: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @routes_bp.route("/add_order", methods=["POST"])
 @login_required
 def add_order():
@@ -760,20 +1013,26 @@ def add_order():
         trading_mode = data.get("trading_mode")
         # logger.info(f"Modo de trading recibido: {trading_mode}")
 
+
         if trading_mode == "spot":
             # Extraer los parámetros de la orden desde el JSON
-            ordertype = data.get("ordertype")    # e.g., "limit"
-            order_direction = data.get("type")     # "buy" o "sell"
+            ordertype = data.get("orderType")    # e.g., "limit"
+            order_direction = data.get("orderDirection")     # "buy" o "sell"
             volume = data.get("volume")            # volumen en activo base
             symbol = data.get("symbol")            # par de trading, e.g., "XBTUSD"
-            price = data.get("price")              # precio límite (si aplica)
+            price = data.get("price", volume)    # TODO:  chage to price          # precio límite (si aplica)
 
             # Validar que los parámetros esenciales estén presentes
             if not all([ordertype, order_direction, volume, symbol, price]):
-                return jsonify({"error": "Faltan parámetros requeridos"}), 400
+                return jsonify({"error": f"Faltan parámetros requeridos {[ordertype, order_direction, volume, symbol, price]}"}), 400
 
             # Crear una instancia de la clase para órdenes spot
             spot_client = KrakenSpotApiAddOrder()
+            spot_client = KrakenAPISpot(current_user.id)
+
+            response = spot_client.add_order(ordertype, order_direction, volume, symbol, price)
+            print(f"Respuesta de add_order: {response}")
+            return jsonify(response[0]), response[1]
             
             # Llamar al método add_order pasando los parámetros y las credenciales (API_KEY_KRAKEN y API_SECRET_KRAKEN)
             result = spot_client.add_order(
@@ -782,8 +1041,8 @@ def add_order():
                 volume=volume,
                 symbol=symbol,
                 price=price,
-                api_key=API_KEY_KRAKEN,
-                api_secret=API_SECRET_KRAKEN
+                api_key="oI9M8AxfCKLCYe0WRZE5QpPQ/GMeiw9QoxWhPTd2sqjGn2QFJqcP90X1",
+                api_secret="PpeGj6z4uaxz2KNgIIdccC8cVQR+brTrLXUAEWsHhTw5TSMMZY5PBNFnEw+RkJaMlp2mHxfZMPYwemiGHs6eig=="
             )
             return jsonify(result)
         
@@ -796,6 +1055,7 @@ def add_order():
 
     except Exception as e:
         logger.error(f"Error en add_order: {e}")
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 @routes_bp.route("/upload_class", methods=["POST"])

@@ -2,24 +2,72 @@ import requests
 import json, time
 from flask import jsonify
 from app.viewmodels.services.GenerateApiSign import GenerateApiSign  # Importar la clase GenerateApiSign
-
+import random
 import logging
+import os
+import threading
 
 logger = logging.getLogger(__name__)
 
 class KrakenSpotApiGetAccountBalance:
+    # Lock for thread safety when accessing the nonce file
+    _nonce_lock = threading.Lock()
+    # Path to the file that stores the last used nonce
+    _nonce_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kraken_last_nonce.txt')
+    
     def __init__(self):
         self.__endpoint = "https://api.kraken.com/0/private/Balance"
         self.data = None
+        
+    @classmethod
+    def _read_last_nonce(cls):
+        """Read the last used nonce from the file"""
+        try:
+            with cls._nonce_lock:
+                if os.path.exists(cls._nonce_file):
+                    with open(cls._nonce_file, 'r') as f:
+                        return int(f.read().strip())
+                else:
+                    # If file doesn't exist, return current time in milliseconds
+                    return int(time.time() * 1000)
+        except Exception as e:
+            logger.error(f"Error reading nonce file: {e}")
+            # Fallback to current time in milliseconds
+            return int(time.time() * 1000)
+    
+    @classmethod
+    def _write_nonce(cls, nonce):
+        """Write the nonce to the file"""
+        try:
+            with cls._nonce_lock:
+                with open(cls._nonce_file, 'w') as f:
+                    f.write(str(nonce))
+        except Exception as e:
+            logger.error(f"Error writing to nonce file: {e}")
 
     def get_account_balance(self, api_key, api_secret):
 
-        #Generar un nonce único (por ejemplo, usando el timestamp actual)
-        nonce = int(time.time()*1000)
+        # Leer el último nonce utilizado
+        last_nonce = self._read_last_nonce()
+        
+        # Generar un nonce único que sea siempre creciente
+        current_nonce = int(time.time() * 1000)
+        
+        # Asegurar que el nonce sea mayor que el último utilizado
+        if current_nonce <= last_nonce:
+            current_nonce = last_nonce + 1 + random.randint(1, 1000)
+        
+        # Guardar el nuevo nonce
+        self._write_nonce(current_nonce)
+        
+        # Convertir a string para la API
+        nonce = str(current_nonce)
+        
+        logger.info(f"Using nonce: {nonce} (previous: {last_nonce})")
 
         #Construir el directorio de datos
         payload = {
-            "nonce":nonce
+            "nonce": nonce
         }
 
         # Generar el API-Sign

@@ -76,7 +76,7 @@ d.addEventListener("DOMContentLoaded", async (e)=>{
    
     //Esta funcion permite mediante el boton 'trading-mode-button' cambiar entre los controles
     // para operar en spot y en futuros, dependiendo del metodo en el que se encuentre
-    method_trading('trading-mode-button','manual-trading-controls','ai-trading-controls');
+    // method_trading('trading-mode-button','manual-trading-controls','ai-trading-controls');
 
     send_strategy(null,'send-strategy','chat-input','strategy-mode-button','chat-messages');
 
