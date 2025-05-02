@@ -1,0 +1,9 @@
+- Implement better UI to show USD balance and what to buy
+- Integrate all diferrent types of  order types inlucing adding stop loss
+- Integrate IA to place orders (basic)
+- Reserach what are stragegys means
+- save stragegies on db
+- rellenar market analysis
+- testear dockerfile
+- endpooin to get bot status
+

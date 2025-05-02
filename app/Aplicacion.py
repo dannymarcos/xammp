@@ -3,19 +3,36 @@
 #app/Aplicacion.py
 
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from flask_login import LoginManager  # Import LoginManager
+from flask_sqlalchemy import SQLAlchemy
+from flask_babel import Babel, _  # Import Babel and _ function for translations
+
 from app.models.create_db import db
 from app.models.users import User  # Import the User model
+
 
 class Application:
    
     def __init__(self, config_object):
         self.app = Flask(__name__, template_folder="iu/templates", static_folder="iu/static")
         self.app.config.from_object(config_object)
+        
+        # Set default Babel configuration
+        self.app.config['BABEL_DEFAULT_LOCALE'] = 'en'
+        self.app.config['BABEL_DEFAULT_TIMEZONE'] = 'UTC'
+        
         db.init_app(self.app) #Inicializamos db dentro del constructor
         CORS(self.app)
+        
+        # Initialize Babel for translations
+        self.babel = Babel(self.app)
+        
+        # Make the _ function available in templates
+        self.app.jinja_env.globals['_'] = _
+
+        # Track logged-in users (email: id)
+        self.logged_users = {}
 
         # Initialize Flask-Login
         self.login_manager = LoginManager()
@@ -39,8 +56,21 @@ class Application:
         """Register the user_loader callback with Flask-Login."""
         @self.login_manager.user_loader
         def load_user(user_id):
-            # Since the user ID is the email in our case
-            return User.query.get(str(user_id))
+            # Now using UUID string as ID
+            return User.query.get(user_id)
 
     def app_context(self): 
         return self.app.app_context()
+
+    def add_logged_user(self, email, user_id):
+        """Add a logged-in user to the storage."""
+        self.logged_users[email] = user_id
+
+    def remove_logged_user(self, email):
+        """Remove a logged-out user from the storage."""
+        if email in self.logged_users:
+            del self.logged_users[email]
+
+    def get_logged_users(self):
+        """Get all currently logged users."""
+        return self.logged_users.copy()
