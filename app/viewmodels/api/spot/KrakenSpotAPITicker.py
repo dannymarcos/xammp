@@ -21,7 +21,7 @@ class KrakenSpotAPI:
 
             self.data = response.json()
             if "error" in self.data and self.data["error"]:
-                logger.error(f"Kraken API error: {data['error']}")
+                logger.error(f"Kraken API error: {self.data['error']}")
                 return {"error": str(self.data["error"])}, 500
 
         except Exception as e:
@@ -31,23 +31,33 @@ class KrakenSpotAPI:
         return self.data, 200
         
     def get_symbol_and_ultimate_price_trade(self):
-
         if not self.data:
+            logger.error("No data available for symbol and price processing")
             return {"error":"No data available"}, 500
+            
         try:
             result = self.data.get("result", {})
+            if not result:
+                logger.warning("Empty result set from Kraken API")
+                return {"cryptos": []}, 200
+                
             cryptos = []
+            logger.debug(f"Processing {len(result.items())} trading pairs")
+
             for pair_name, ticker_info in result.items():
                 if "c" in ticker_info:  # "c" contains the last trade closed price
                     price = ticker_info["c"][0]  # First element is the price
+                    logger.debug(f"Processing pair {pair_name} with price {price}")
                     cryptos.append({
                         "symbol": pair_name,
                         "price": price
-                        })
+                    })
+                else:
+                    logger.warning(f"Pair {pair_name} missing 'c' (close price) field")
+
+            logger.info(f"Successfully processed {len(cryptos)} crypto pairs")
+            return {"cryptos": cryptos}, 200
+            
         except Exception as e:
-            logger.error(f"Error getting cryptocurrencies: {e}")
-            return jsonify({"error": str(e)}), 500
-        return {"cryptos":cryptos}, 200
-    
-    
-    
+            logger.error(f"Error processing symbol data: {e}", exc_info=True)
+            return {"error": str(e)}, 500

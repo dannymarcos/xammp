@@ -1,10 +1,12 @@
 Bien, Ya le di una vuelta a lo que me pasaste. Para dejar esto andando como quieres, hay que hacerle estas tareas:
 
-- Revisión y puesta en marcha del Login: Asegurar que el sistema de autenticación funcione correctamente con la base de datos existente.
-- Conexión e Integración con la API de Kraken: Establecer la comunicación necesaria para enviar y recibir datos y órdenes.
-- Implementación de Operaciones Manuales (Spot y Futuros): Permitir al usuario ejecutar compras y ventas directamente desde la interfaz.
-- Integración y Activación de la Lógica de IA: Conectar la IA proporcionada para que ejecute operaciones de forma autónoma.
-- Despliegue Inicial en la Nube: Configurar el entorno necesario para que la aplicación sea accesible online.
+- Revisión y puesta en marcha del Login: Asegurar que el sistema de autenticación funcione correctamente con la base de datos existente. ✅
+- Conexión e Integración con la API de Kraken: Establecer la comunicación necesaria para enviar y recibir datos y órdenes. ✅
+- Implementación de Operaciones Manuales (Spot y Futuros): Permitir al usuario ejecutar compras y ventas directamente desde la interfaz. (Solo Market y en SPOT ✅)
+- Integración y Activación de la Lógica de IA: Conectar la IA proporcionada para que ejecute operaciones de forma autónoma. ✅
+- Agregar criptos para traerlas de Kraken en vez de otros exchanges
+- Cambiar logo
+- Despliegue Inicial en la Nube: Configurar el entorno necesario para que la aplicación sea accesible online. (Proximamente)
 - Revisión Inicial para la Implementación del Gráfico: Evaluar los requisitos para añadir la funcionalidad del gráfico en una fase posterior.
 - Darle una primera mirada al gráfico: Ver qué se necesita para eso más adelante.
 

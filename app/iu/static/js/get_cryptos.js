@@ -38,7 +38,7 @@ export default async function get_cryptos(method,boton,cryptoList,cryptoSearch) 
                         body: JSON.stringify({trading_mode: metodo})
                     });
                     let json = await response.json();
-                    console.log({json})
+                    console.log({cryptoList:json})
 
                     // console.log(`Respuesta desde /get_cryptos en routes.py:`, json);
 

@@ -54,7 +54,7 @@
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="buy-total" class="form-label small">{{ _('Total') }}</label>
+                                <label for="buy-total" class="form-label small">{{ _('Total Currency') }}</label>
                                 <div class="input-group input-group-sm">
                                     <input type="number" class="form-control" id="buy-total" placeholder="0.00">
                                     <select class="form-select flex-grow-0 w-auto" id="buy-currency">
@@ -81,7 +81,7 @@
                             <div class="small text-muted border-top pt-3 mt-3">
                                 <div class="d-flex justify-content-between mb-1">
                                     <span>{{ _('Available') }}</span>
-                                    <span id="buy-avbl" class="font-monospace">6.71869529 DUMMY USDT <button class="btn btn-link btn-sm p-0 ms-1">+</button></span>
+                                    <span id="buy-avbl" class="font-monospace"><button class="btn btn-link btn-sm p-0 ms-1">+</button></span>
                                 </div>
                                 <!-- Extra info -->
                                 <!-- <div class="d-flex justify-content-between mb-1">
@@ -98,9 +98,17 @@
                             <!-- Buy Button -->
                             <div class="d-grid mt-4">
                                 <button type="button" class="btn btn-success">
-                                    {{ _('Buy DUMMY BTC') }}
+                                    {{ _('Buy') }}
                                 </button>
                             </div>
+
+                            <!-- Preview -->
+                            <div class="border-top pt-3 mt-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>{{ _('Amount Received') }}</span>
+                                    <span id="buy-amount-recived" class="font-monospace"></span>
+                                </div>
+                             </div>
                         </div>
                     </div>
 
@@ -171,7 +179,36 @@
             <div class="tab-pane fade" id="isolated-tab-pane" role="tabpanel" aria-labelledby="isolated-tab" tabindex="0">{{ _('Isolated Trading UI Placeholder') }}</div>
             <div class="tab-pane fade" id="grid-tab-pane" role="tabpanel" aria-labelledby="grid-tab" tabindex="0">{{ _('Grid Trading UI Placeholder') }}</div>
         </div> <!-- End Tab Content -->
-    </div> <!-- End Card Body -->
+    
+        <!-- Trades Table -->
+        <div class="mt-4">
+            <h3 class="font-medium mb-2">{{ _('Recent Trades') }}</h3>
+            <table class="table table-sm table-striped scrollable-table">
+                <thead>
+                    <tr>
+                        <th>{{ _('Date') }}</th>
+                        <th>{{ _('Order Type') }}</th>
+                        <th>{{ _('Direction') }}</th>
+                        <th>{{ _('Symbol') }}</th>
+                        <th class="text-end">{{ _('Price') }}</th>
+                        <th class="text-end">{{ _('Volume') }}</th>
+                        <th>{{ _('Status') }}</th>
+                        <th class="text-end">{{ _('Stop Loss') }}</th>
+                        <th class="text-end">{{ _('Take Profit') }}</th>
+                        <th>{{ _('Close Condition') }}</th>
+                        <th>{{ _('Comment') }}</th>
+                    </tr>
+                </thead>
+                <tbody id="user-trade-history-body">
+                    <!-- Trade history will be populated here -->
+                    <tr>
+                        <td colspan="6" class="text-center">{{ _('No trades found') }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div> 
+    <!-- End Card Body -->
 </div> <!-- End Card -->
 
 <!-- Add component-specific JavaScript -->

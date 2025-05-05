@@ -1,16 +1,20 @@
-import ccxt
-import pandas as pd
-import os
-import time
 import logging
-import traceback
-from dotenv import load_dotenv
-from threading import Lock, Thread
-from typing import Dict, Optional, List, Literal
-from pydantic import BaseModel, Field, field_validator
-from datetime import datetime
+import os
 import signal
 import sys
+import time
+import traceback
+from datetime import datetime
+from threading import Lock, Thread
+from typing import Dict, Literal, Optional
+
+import ccxt
+import pandas as pd
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field, field_validator
+
+from app.models.trades import get_open_trades_from_user
+from app.models.users import add_last_error_message
 from app.viewmodels.api.kraken.KrakenAPI import KrakenAPI
 
 # Configure logging
@@ -20,6 +24,62 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+# ----------------------------
+# Q-Learning Table
+# ----------------------------
+
+class SimpleQTable:
+    """Q-learning table for trading decisions with incremental updates"""
+    
+    def __init__(self, q_table_path='q_table.csv'):
+        self.q_table_path = q_table_path
+        self.new_entries = []
+        try:
+            self.q_table = pd.read_csv(q_table_path)
+            logger.info(f"Loaded Q-table from {q_table_path}")
+        except Exception as e:
+            logger.warning(f"Could not load Q-table: {str(e)}")
+            self.q_table = pd.DataFrame(columns=['state','buy','sell','hold'])
+            
+    def get_action(self, state: str) -> str:
+        """Get best action for given state"""
+        try:
+            row = self.q_table[self.q_table['state'] == state].iloc[0]
+            return max(['buy','sell','hold'], key=lambda x: row[x])
+        except:
+            # Track new states encountered
+            if state not in [e['state'] for e in self.new_entries]:
+                self.new_entries.append({
+                    'state': state,
+                    'buy': 0.5,  # Initial Q-values
+                    'sell': 0.5,
+                    'hold': 0.5
+                })
+            return 'hold'  # Default action if state not found
+            
+    def update_q_value(self, state: str, action: str, reward: float, learning_rate=0.1):
+        """Update Q-value for state-action pair"""
+        # First check new entries
+        for entry in self.new_entries:
+            if entry['state'] == state:
+                entry[action] = (1 - learning_rate) * entry[action] + learning_rate * reward
+                return
+                
+        # Then check existing table
+        if state in self.q_table['state'].values:
+            idx = self.q_table[self.q_table['state'] == state].index[0]
+            self.q_table.at[idx, action] = (1 - learning_rate) * self.q_table.at[idx, action] + learning_rate * reward
+            
+    def save(self, path=None):
+        """Save Q-table to file, merging new entries"""
+        path = path or self.q_table_path
+        # Merge new entries with existing table
+        if self.new_entries:
+            new_df = pd.DataFrame(self.new_entries)
+            self.q_table = pd.concat([self.q_table, new_df]).drop_duplicates('state', keep='last')
+            self.new_entries = []
+        self.q_table.to_csv(path, index=False)
 
 # ----------------------------
 # Configuration Models
@@ -96,8 +156,11 @@ class KrakenTradingBot:
             self.trade_history = []
             self._initialized = True
             self._last_update = datetime.now()
+            self.bot_errors = []
+            self.signals = []
+            self.q_table = SimpleQTable()
 
-            logger.info(f"✅ Successfully initialized bot for user {user_id}")
+            logger.info(f"✅ Successfully initialized bot for user {user_id} \n {self.config.model_dump_json(indent=4)}")
             logger.debug(f"⚙️ Configuration for user {user_id}:\n{self.config.model_dump_json(indent=4)}")
         except Exception as e:
             logger.error(f"Failed to initialize bot for user {user_id}: {str(e)}")
@@ -108,6 +171,34 @@ class KrakenTradingBot:
         self.running = False
         print(f"🛑 Stopped bot for {self.user_id}")
 
+    def _add_bot_error(self, error):
+        self.bot_errors.append(error)
+
+    def _check_for_open_trades(self):
+        return bool(self.active_trades)
+        raise NotImplementedError("This has to add a logic to close opened orders to be able to work")
+        
+        open_trades_db = get_open_trades_from_user(self.user_id)
+
+        if not open_trades_db or len(open_trades_db) == 0:
+            logger.debug(f"No open trades found for {self.user_id} in Database")
+            return []
+        
+        return open_trades_db
+
+    def _should_stop(self):
+        open_trades_found =  self._check_for_open_trades()
+
+        limit_errors_passed = len(self.bot_errors) > 3
+
+        # only stop bot if there are no open trades
+        if not open_trades_found and limit_errors_passed:
+            logger.warning(f"Stopping bot for user {self.user_id} due to many errors")
+            logger.warning(f"Bot errors: \n {'\n - '.join(self.bot_errors)}")
+            self._force_stop()
+            add_last_error_message(self.user_id, '\n'.join(self.bot_errors))
+            return True
+    
     def start(self):
         """Start the trading bot in a background thread"""
         logger.info(f"Attempting to start bot for user {self.user_id}")
@@ -118,16 +209,35 @@ class KrakenTradingBot:
 
         try:
             self.running = True
-            logger.info(f"Creating trading thread for user {self.user_id}")
+            logger.debug(f"Creating trading thread for user {self.user_id}")
             self.thread = Thread(target=self._run_loop, daemon=True)
             self.thread.start()
             logger.info(f"✅ Successfully started bot for user {self.user_id}")
+            # Reset bot errors
+            add_last_error_message(self.user_id, '')
             return True
         except Exception as e:
             self.running = False
             logger.error(f"Failed to start bot for user {self.user_id}: {str(e)}")
             logger.debug(f"Start error details: {traceback.format_exc()}")
             return False
+        
+    def _print_report(self):
+        print(f"""
+              📊📊 Report for user {self.user_id}
+
+              Total trades: {len(self.trade_history)}
+              Total wins: {len([trade for trade in self.trade_history if trade['profit'] > 0])}
+              Total losses: {len([trade for trade in self.trade_history if trade['profit'] < 0])}
+
+              Total profit: {sum([trade['profit'] for trade in self.trade_history])}
+              Total ROI: {sum([trade['roi'] for trade in self.trade_history])}
+
+              Total Signals: {len(self.signals)}
+              Total Buys: {len([signal for signal in self.signals if signal['buy']])}
+              Total Sells: {len([signal for signal in self.signals if signal['sell']])}
+            """
+            )
 
     def _run_loop(self):
         """Main trading loop"""
@@ -137,7 +247,9 @@ class KrakenTradingBot:
         while self.running:
             loop_count += 1
             logger.debug(f"Trading loop iteration {loop_count} for user {self.user_id}")
-            
+
+            if self._should_stop():
+                break
             try:
                 start_time = time.time()
                 
@@ -151,7 +263,7 @@ class KrakenTradingBot:
                 # 2. Generate trading signals
                 logger.debug(f"Generating trading signals for {self.config.trading_pair}")
                 signals = self._generate_signals(ohlcv)
-                logger.info(f"Generated signals for {self.config.trading_pair}: {signals}")
+                logger.info(f"🧙 Generated signals for {self.config.trading_pair}: {signals}")
 
                 # 3. Execute trades
                 logger.debug(f"Executing trading strategy based on signals")
@@ -168,12 +280,17 @@ class KrakenTradingBot:
                     1  # Minimum 1 second
                 )
                 logger.debug(f"Iteration took {elapsed:.2f}s, sleeping for {sleep_time:.2f}s")
+                
+                # Periodically save Q-table every 100 iterations
+                if loop_count % 100 == 0:
+                    self.q_table.save()
+                    
                 time.sleep(sleep_time)
 
             except Exception as e:
                 logger.error(f"⚠️ Trading loop error for user {self.user_id}: {str(e)}")
-                logger.debug(f"Trading loop error details: {traceback.format_exc()}")
-                logger.info(f"Pausing trading loop for 30 seconds after error")
+                logger.info("Pausing trading loop for 30 seconds after error")
+                traceback.print_exc()
                 time.sleep(30)
 
     def _fetch_market_data(self) -> Optional[pd.DataFrame]:
@@ -206,7 +323,7 @@ class KrakenTradingBot:
             return None
 
     def _generate_signals(self, df: pd.DataFrame) -> Dict:
-        """Generate trading signals from market data"""
+        """Generate trading signals from market data using Q-learning and indicators"""
         signals = {'buy': False, 'sell': False}
 
         # Calculate indicators
@@ -217,20 +334,31 @@ class KrakenTradingBot:
         last = df.iloc[-1]
         prev = df.iloc[-2]
 
-        # EMA Crossover Strategy
-        if last['EMA12'] > last['EMA26'] and prev['EMA12'] <= prev['EMA26']:
+        # Create state representation
+        ema_cross = 'up' if last['EMA12'] > last['EMA26'] else 'down'
+        rsi_state = 'low' if last['RSI'] < 30 else 'high' if last['RSI'] > 70 else 'mid'
+        state_key = f"ema_{ema_cross}_rsi_{rsi_state}"
+
+        # Get Q-learning action
+        q_action = self.q_table.get_action(state_key)
+
+        # Combine with indicator strategies
+        if q_action == 'buy' or \
+           (last['EMA12'] > last['EMA26'] and prev['EMA12'] <= prev['EMA26']) or \
+           (last['RSI'] < 30):
             signals['buy'] = True
-        elif last['EMA12'] < last['EMA26'] and prev['EMA12'] >= prev['EMA26']:
+
+        if q_action == 'sell' or \
+           (last['EMA12'] < last['EMA26'] and prev['EMA12'] >= prev['EMA26']) or \
+           (last['RSI'] > 70):
             signals['sell'] = True
 
-        # RSI Strategy
-        if last['RSI'] < 30:
-            signals['buy'] = True
-        elif last['RSI'] > 70:
-            signals['sell'] = True
+        # for testing
+        """ import random
+        signals['buy'] = random.choice([True, False])
+        signals['sell'] = random.choice([True, False]) """
 
-        signals["buy"] = True # TODO: Remove
-
+        self.signals.append(signals) # Track signals
         return signals
 
     def _execute_strategy(self, signals: Dict):
@@ -245,19 +373,36 @@ class KrakenTradingBot:
         if signals['buy'] and not self.active_trades:
             order = self._create_order('buy', current_price)
             if order:
+                # Get current market state
+                ohlcv = self._fetch_market_data()
+                if ohlcv is not None:
+                    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    df['EMA12'] = df['close'].ewm(span=12, adjust=False).mean()
+                    df['EMA26'] = df['close'].ewm(span=26, adjust=False).mean()
+                    df['RSI'] = self._calculate_rsi(df['close'], 14)
+                    last = df.iloc[-1]
+                    ema_cross = 'up' if last['EMA12'] > last['EMA26'] else 'down'
+                    rsi_state = 'low' if last['RSI'] < 30 else 'high' if last['RSI'] > 70 else 'mid'
+                    entry_state = f"ema_{ema_cross}_rsi_{rsi_state}"
+                else:
+                    entry_state = "unknown"
+                
                 self.active_trades.append({
                     'id': order['id'],
-                    'side': 'buy',
+                    'order_direction': 'buy',
                     'price': float(order['price']),
                     'stop_loss': current_price * (1 - self.config.stop_loss_pct),
                     'take_profit': current_price * (1 + self.config.take_profit_pct),
-                    'time': datetime.now()
+                    'time': datetime.now(),
+                    'entry_state': entry_state
                 })
 
+   
+
         # Sell Signal
-        elif signals['sell'] and self.active_trades:
+        elif signals['sell']: # #TODO: add system to track orders made and self.active_trades:
             for trade in self.active_trades[:]:  # Create copy for iteration
-                if trade['side'] == 'buy':
+                if trade['order_direction'] == 'buy':
                     order = self._create_order('sell', current_price)
                     if order:
                         self.active_trades.remove(trade)
@@ -295,22 +440,29 @@ class KrakenTradingBot:
     def _create_order(self, side: str, price: float) -> Optional[Dict]:
         """Create order with proper error handling"""
         try:
-            order = self.exchange.create_order(
+            logger.info(f"💵 Creating {side} order at {price} for {self.config.trading_pair} with {self.config.trade_amount} units")
+            """ order = self.exchange.create_order(
                 symbol=self.config.trading_pair,
-                type='market',
+                type='market', # TODO: Change to to accesos more types
                 side=side,
                 amount=self.config.trade_amount,
                 params={
                     'trading_engine': self.config.trading_mode,
                     'leverage': 2 if self.config.trading_mode == 'futures' else 1
                 }
-            )
-            print(f"✅ {side.upper()} order executed: {order['id']}")
+            ) """
 
-            self.kraken_api.add_order_to_db({"id": "pepe", "symbol": self.config.trading_pair})
-            return order
+            order_created, _ = self.kraken_api.add_order("market", side, self.config.trade_amount, self.config.trading_pair, order_made_by="bot")
+            
+            if 'error' in order_created:
+                raise Exception(order_created['error'])
+            
+            logger.info(f"✅ {side.upper()} order executed: {order_created['id']}")
+            return order_created
         except Exception as e:
-            print(f"❌ Failed to execute {side} order: {str(e)}")
+            logger.error(f"❌ Failed to create {side} order: {str(e)}")
+            self._add_bot_error(f"❌ Failed to execute {side} order: {str(e)}")
+            traceback.print_exc()
             return None
 
     def _get_current_price(self) -> float:
@@ -331,12 +483,31 @@ class KrakenTradingBot:
         return 100 - (100 / (1 + rs))
 
     def _record_trade_result(self, trade: Dict, exit_price: float, reason: str):
-        """Record completed trade"""
+        """Record completed trade and update Q-values"""
+        pnl = (exit_price - trade['price']) * self.config.trade_amount
+        roi = (exit_price - trade['price']) / trade['price']
+        
+        # Calculate reward based on trade outcome
+        reward = 0
+        if reason == 'take_profit':
+            reward = 1.0
+        elif reason == 'stop_loss':
+            reward = -1.0
+        else:
+            reward = 0.5 if pnl > 0 else -0.5
+            
+        # Get the state when trade was opened
+        if hasattr(trade, 'entry_state'):
+            self.q_table.update_q_value(trade['entry_state'], 
+                                      trade['order_direction'], 
+                                      reward)
+
         self.trade_history.append({
             **trade,
             'exit_price': exit_price,
             'exit_time': datetime.now(),
-            'pnl': (exit_price - trade['price']) * self.config.trade_amount,
+            'pnl': pnl,
+            'roi': roi,
             'exit_reason': reason
         })
 
@@ -346,6 +517,8 @@ class KrakenTradingBot:
         if hasattr(self, 'thread'):
             self.thread.join()
         print(f"🛑 Stopped bot for {self.user_id}")
+        self._print_report()
+        self.q_table.save()  # Save Q-table on shutdown
 
     @classmethod
     def get_instance(cls, user_id: str) -> Optional['KrakenTradingBot']:

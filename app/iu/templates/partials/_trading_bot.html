@@ -11,6 +11,8 @@
             <div class="d-flex align-items-center">
                 <span class="me-2">{{ _('Status') }}:</span>
                 <span id="bot-status" class="badge bg-secondary">{{ _('Stopped') }}</span>
+                <span class="ml-2">{{ _('Last Error') }}:</span>
+                <span id="last_error_message" class="badge bg-warning"></span>
             </div>
         </div>
         
@@ -25,7 +27,7 @@
                 </div>
                 <div class="col-md-4">
                     <div class="form-floating">
-                        <input type="number" class="form-control" id="bot-max-active-trades" value="1" min="1" disabled>
+                        <input type="number" class="form-control" id="bot-max-active-trades" value="1" min="1">
                         <label for="bot-max-active-trades">{{ _('Max Active Trades') }}</label>
                     </div>
                 </div>
@@ -33,12 +35,14 @@
                     <div class="form-floating">
                         <input type="number" class="form-control" id="bot-stop-loss-pct" value="0.02" step="0.01" min="0.01" max="0.5" disabled>
                         <label for="bot-stop-loss-pct">{{ _('Stop Loss (%)') }}</label>
+                        <span>{{ _('(Temporally Disabled)') }}</span>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="form-floating">
                         <input type="number" class="form-control" id="bot-take-profit-pct" value="0.04" step="0.01" min="0.01" max="1" disabled>
                         <label for="bot-take-profit-pct">{{ _('Take Profit (%)') }}</label>
+                        <span>{{ _('(Temporally Disabled)') }}</span>
                     </div>
                 </div>
                  <div class="col-md-6">
@@ -65,7 +69,7 @@
                 </div>
                 <div class="col-md-6">
                     <div class="form-floating">
-                        <input type="number" class="form-control" id="bot-amount" value="0.01" step="0.001" min="0.001">
+                        <input type="number" class="form-control" id="bot-amount" value="0.0001" step="0.001" min="0.001">
                         <label for="bot-amount">{{ _('Trade Amount') }}</label>
                     </div>
                 </div>
@@ -88,18 +92,23 @@
                 <table class="table table-striped table-hover">
                     <thead class="table-light">
                         <tr>
-                            <th>{{ _('Type') }}</th>
+                            <th>{{ _('Order Type') }}</th>
                             <th>{{ _('Date') }}</th>
                             <th>{{ _('Direction') }}</th>
                             <th>{{ _('Symbol') }}</th>
                             <th class="text-end">{{ _('Price') }}</th>
                             <th class="text-end">{{ _('Volume') }}</th>
+                            <th>{{ _('Status') }}</th>
+                            <th class="text-end">{{ _('Stop Loss') }}</th>
+                            <th class="text-end">{{ _('Take Profit') }}</th>
+                            <th>{{ _('Close Condition') }}</th>
+                            <th>{{ _('Comment') }}</th>
                         </tr>
                     </thead>
                     <tbody id="trade-history-body">
                         <!-- Trade history will be populated here -->
                         <tr>
-                            <td colspan="6" class="text-center">{{ _('No trades found') }}</td>
+                            <td colspan="8" class="text-center">{{ _('No trades found') }}</td>
                         </tr>
                     </tbody>
                 </table>

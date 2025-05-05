@@ -38,7 +38,7 @@ export default class TvWidget {
        this.widget = new TradingView.widget({
             "width": "100%",
             "height": 500,
-            "symbol": `${symbol}`,
+            "symbol": `KRAKEN:${symbol}`,
             "interval": "1",
             "timezone": "Etc/UTC",
             "theme": "dark",

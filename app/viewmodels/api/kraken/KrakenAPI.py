@@ -51,17 +51,36 @@ class KrakenAPI:
         self.trading_mode = trading_mode
 
     def add_order_to_db(self, order):
+        from main import app_instance
+
+        app = app_instance
         try:
-            trade = Trade(
-                            user_id=self.user_id,
-                            order_id=order['id'],
-                            symbol=order['symbol'],)
-            db.session.add(trade)
-            db.session.commit()
+            if hasattr(app, 'app_context'):
+                with app.app_context():
+                    trade = Trade(**order)
+                    db.session.add(trade)
+                    db.session.commit()
+                    return trade.serialize
+            else:
+                try:
+                    trade = Trade(**order)
+                    db.session.add(trade)
+                    db.session.commit()
+                    return trade.serialize
+                except RuntimeError as e:
+                    if 'working outside of application context' in str(e).lower():
+                        raise RuntimeError("Flask application context not available")
+                    raise
         except Exception as e:
             traceback.print_exc()
             return {"error": str(e)}, 400
-        
+
+    def calculate_stop_loss(self,target_price, stop_loss_percentage=0.02):
+        return target_price * (1 - stop_loss_percentage)
+    
+    def calculate_take_profit(self,target_price, take_profit_percentage=0.04):
+        return target_price * (1 + take_profit_percentage)
+
     def get_trades_history(self):
         raise NotImplementedError("Method not implemented")
 
@@ -72,8 +91,6 @@ class KrakenAPI:
         try:
             # Use the provided symbol parameter in the URL
             url = f"https://api.kraken.com/0/public/Ticker?pair={symbol}"
-            
-            logger.info(f"Fetching price for symbol: {symbol} from URL: {url}")
             
             payload = {}
             headers = {
@@ -102,7 +119,7 @@ class KrakenAPI:
             section = "c"  # Last trade closed
             position = 0   # Price is the first element in the array
             
-            price = data["result"][ticker_key][section][position]
+            price = float(data["result"][ticker_key][section][position])
             
             return {"price": price}, 200
         except Exception as e:

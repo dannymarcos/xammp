@@ -57,6 +57,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 from app.viewmodels.api.kraken.KrakenAPIFutures import KrakenAPIFutures
 from app.viewmodels.api.kraken.KrakenAPISpot import KrakenAPISpot
+from app.models.referral_link import ReferralLink
 
 #Iniciamos las variables de entorno desde el archivo .env
 load_dotenv()
@@ -176,18 +177,14 @@ def start_bot_trading():
         
         # Validate required parameters
         if not data:
-            logger.error(f"No JSON data provided in request")
             current_bot_status = "error"
-            update_user_bot_status(user_id, current_bot_status)
-            return jsonify({"error": "No data provided", "bot_status": current_bot_status}), 400
+            raise Exception("No JSON data provided in request")
         
         # Get trading mode
         trading_mode = data.get("trading_mode")
         if trading_mode not in ['spot', 'futures']:
-            logger.error(f"Invalid trading mode: {trading_mode}")
             current_bot_status = "error"
-            update_user_bot_status(user_id, current_bot_status)
-            return jsonify({"error": "Invalid trading mode", "bot_status": current_bot_status}), 400
+            raise Exception(f"Invalid trading mode: {trading_mode}")
         
         # Create configuration for the bot
         config = {
@@ -217,9 +214,7 @@ def start_bot_trading():
             return jsonify({"status": "Bot started", "bot_status": current_bot_status}), 200
         else:
             current_bot_status = "error"
-            update_user_bot_status(user_id, current_bot_status)
-            logger.error(f"Failed to start bot for user {user_id}")
-            return jsonify({"error": "Failed to start bot", "bot_status": current_bot_status}), 400
+            raise Exception("Failed to start bot")
     
     except Exception as e:
         logger.error(f"Error starting bot for user {current_user.id}: {str(e)}")
@@ -301,12 +296,12 @@ def get_bot_status():
             update_user_bot_status(user_id, bot_status)
         
         logger.debug(f"Bot status for user {user_id}: {bot_status}")
-        return jsonify({"bot_status": bot_status}), 200
+        return jsonify({"bot_status": bot_status, "last_error_message": user.last_error_message or ""}), 200
     
     except Exception as e:
         logger.error(f"Error getting bot status for user {current_user.id}: {str(e)}")
         logger.debug(f"Error details: {traceback.format_exc()}")
-        return jsonify({"bot_status": "error", "error": str(e)}), 500
+        return jsonify({"bot_status": "error", "error": str(e), "last_error_message": user.last_error_message or ""}), 500
 
 @routes_bp.route("/trades")
 @login_required
@@ -320,10 +315,11 @@ def get_trades():
     """
     try:
         user_id = current_user.id
+        by = request.args.get('by', 'all')
         logger.debug(f"Getting trade history for user {user_id}")
         
         # Get the trade history from the database
-        trades = get_all_trades_from_user(user_id)
+        trades = get_all_trades_from_user(user_id, by)
         
         # Check if the bot is running and get any active trades
         if TradingBotManager.is_bot_running(user_id):
@@ -953,30 +949,33 @@ def get_cryptos():
     """Get available cryptocurrencies"""
     try:
         data = request.get_json()
-        # trading_mode = current_app.config.get("TRADING_MODE", "spot")
         trading_mode = data.get("trading_mode")
-
-        # logger.info(f"Estamos dentro de routes.py en la funcion get_cryptos Trading mode: {trading_mode}")
         if trading_mode == "futures":
-            # logger.info(f"Estamos dentro de futures en routes.py")
+            logger.info("Processing futures trading mode")
             futures_client = KrakenFuturesAPI()
             data, status = futures_client.get_ticker_kraken()
             if status != 200:
+                logger.error(f"Futures ticker error: {data}")
                 return jsonify(data), status
 
             cryptos, status = futures_client.get_symbol_and_markPrice()
             if status != 200:
+                logger.error(f"Futures symbols error: {cryptos}")
                 return jsonify(cryptos), status
             
         elif trading_mode == "spot":
-            # Para trading spot. usar KrakenSpotApi
             spot_client = KrakenSpotAPI()
             data, status = spot_client.get_ticker_kraken()
             if status != 200:
+                logger.error(f"Spot ticker error: {data}")
                 return jsonify(data), status
+            
             cryptos, status = spot_client.get_symbol_and_ultimate_price_trade()
+            
             if status != 200:
+                logger.error(f"Spot symbols error: {cryptos}")
                 return jsonify(cryptos), status
+
         return jsonify(cryptos)
     except Exception as e:
         logger.error(f"Error getting cryptocurrencies: {e}")
@@ -991,11 +990,27 @@ def get_symbol_price():
         symbol = request.args.get('symbol')
         spot_client = KrakenAPISpot(user_id=current_user.id)
         data = spot_client.get_symbol_price(symbol)
-        print(data)
+
         if data[1] != 200:
             return jsonify(data[0]), data[1]
         
         return jsonify(data[0])
+
+    except Exception as e:
+        logger.error(f"Error getting cryptocurrencies: {e}")
+        return jsonify({"error": str(e)}), 500
+
+routes_bp.route("/trades", methods=['GET'])
+@login_required
+def get_user_trades():
+    """Get all trades made by the user in the app"""
+    try:
+        by = request.args.get("by")
+        if not current_user.is_authenticated:
+            return jsonify({"error": "User not authenticated"}), 401
+        
+        trades = get_all_trades_from_user(current_user.id, by)
+        return jsonify({"trades": trades})
 
     except Exception as e:
         logger.error(f"Error getting cryptocurrencies: {e}")
@@ -1012,7 +1027,7 @@ def add_order():
         data = request.get_json()
         trading_mode = data.get("trading_mode")
         # logger.info(f"Modo de trading recibido: {trading_mode}")
-
+        user_id = current_user.id
 
         if trading_mode == "spot":
             # Extraer los parámetros de la orden desde el JSON
@@ -1020,18 +1035,37 @@ def add_order():
             order_direction = data.get("orderDirection")     # "buy" o "sell"
             volume = data.get("volume")            # volumen en activo base
             symbol = data.get("symbol")            # par de trading, e.g., "XBTUSD"
-            price = data.get("price", volume)    # TODO:  chage to price          # precio límite (si aplica)
+            price = data.get("price", 0)           # precio de la cripto
+            return_all_trades = data.get("return_all_trades", False)
+            order_made_by = data.get("order_made_by", "user")
+            money_wanted_to_spend = data.get("money_wanted_to_spend")
+
 
             # Validar que los parámetros esenciales estén presentes
-            if not all([ordertype, order_direction, volume, symbol, price]):
-                return jsonify({"error": f"Faltan parámetros requeridos {[ordertype, order_direction, volume, symbol, price]}"}), 400
+            if order_direction == "buy":
+                required_params = [ordertype, symbol, order_made_by, money_wanted_to_spend]
+                if not all(required_params):
+                    return jsonify({"error": f"Faltan parámetros requeridos {required_params}"}), 400
+            elif order_direction == "sell":
+                required_params = [ordertype, order_direction, volume, symbol, order_made_by]
+                if not all(required_params):
+                    return jsonify({"error": f"Faltan parámetros requeridos {required_params}"}), 400
 
             # Crear una instancia de la clase para órdenes spot
             spot_client = KrakenSpotApiAddOrder()
-            spot_client = KrakenAPISpot(current_user.id)
+            spot_client = KrakenAPISpot(user_id)
 
-            response = spot_client.add_order(ordertype, order_direction, volume, symbol, price)
-            print(f"Respuesta de add_order: {response}")
+            response = spot_client.add_order(ordertype, order_direction, volume, symbol, price, order_made_by, money_wanted_to_spend)
+
+            if return_all_trades:
+                all_trades = get_all_trades_from_user(user_id)
+
+            final_res = response[0]
+            if return_all_trades:
+                final_res["all_trades"] = all_trades
+            else:
+                final_res["all_trades"] = []
+
             return jsonify(response[0]), response[1]
             
             # Llamar al método add_order pasando los parámetros y las credenciales (API_KEY_KRAKEN y API_SECRET_KRAKEN)
@@ -1124,71 +1158,72 @@ def generate_access_link():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @routes_bp.route("/generate_referral_link", methods=["GET"])
+@login_required
 def generate_referral_link():
     """Generate referral link for current user and get referral tree"""
-    # try:
-    #     # Get current user
-    #     user = User.query.filter_by(email='test@example.com').first()
-    #     if not user:
-    #         return jsonify({"status": "error", "message": "User not found"}), 404
+    try:
+        # Get current user
+        user = User.query.filter_by(id=current_user.id).first()
+        if not user:
+            return jsonify({"status": "error", "message": "User not found"}), 404
 
-    #     # Check if user already has a referral link
-    #     existing_link = ReferralLink.query.filter_by(user_id=user.id, active=True).first()
-    #     if existing_link:
-    #         referral_code = existing_link.code
-    #     else:
-    #         # Generate new referral link
-    #         total_referrals = ReferralLink.query.filter_by(active=False).count()
-    #         referral_number = str(total_referrals + 1).zfill(2)
-    #         referral_code = f"linkreferidosaegiaiaapp{referral_number}"
+        # Check if user already has a referral link
+        existing_link = ReferralLink.query.filter_by(user_id=user.id, active=True).first()
+        if existing_link:
+            referral_code = existing_link.code
+        else:
+            # Generate new referral link
+            total_referrals = ReferralLink.query.filter_by(active=False).count()
+            referral_number = str(total_referrals + 1).zfill(2)
+            referral_code = f"linkreferidosaegiaiaapp{referral_number}"
 
-    #         # Save to database
-    #         new_link = ReferralLink(
-    #             user_id=user.id,
-    #             code=referral_code,
-    #             active=True
-    #         )
-    #         db.session.add(new_link)
-    #         db.session.commit()
+            # Save to database
+            new_link = ReferralLink(
+                user_id=user.id,
+                code=referral_code,
+                active=True
+            )
+            db.session.add(new_link)
+            db.session.commit()
 
-    #     # Get direct referrals
-    #     direct_referrals = []
-    #     direct_refs = ReferralLink.query.filter_by(referred_by=user.id, active=False).all()
-    #     for ref in direct_refs:
-    #         ref_user = User.query.get(ref.user_id)
-    #         if ref_user:
-    #             direct_referrals.append({
-    #                 "name": ref_user.full_name,
-    #                 "date": ref.used_at.strftime("%Y-%m-%d") if ref.used_at else "N/A"
-    #             })
+        # Get direct referrals
+        direct_referrals = []
+        direct_refs = ReferralLink.query.filter_by(referred_by=user.id, active=False).all()
+        for ref in direct_refs:
+            ref_user = User.query.get(ref.user_id)
+            if ref_user:
+                direct_referrals.append({
+                    "name": ref_user.full_name,
+                    "date": ref.used_at.strftime("%Y-%m-%d") if ref.used_at else "N/A"
+                })
 
-    #     # Get indirect referrals (referrals of referrals)
-    #     indirect_referrals = []
-    #     for direct_ref in direct_refs:
-    #         indirect_refs = ReferralLink.query.filter_by(referred_by=direct_ref.user_id, active=False).all()
-    #         for ref in indirect_refs:
-    #             ref_user = User.query.get(ref.user_id)
-    #             referrer = User.query.get(direct_ref.user_id)
-    #             if ref_user and referrer:
-    #                 indirect_referrals.append({
-    #                     "name": ref_user.full_name,
-    #                     "date": ref.used_at.strftime("%Y-%m-%d") if ref.used_at else "N/A",
-    #                     "referred_by": referrer.full_name
-    #                 })
+        # Get indirect referrals (referrals of referrals)
+        indirect_referrals = []
+        for direct_ref in direct_refs:
+            indirect_refs = ReferralLink.query.filter_by(referred_by=direct_ref.user_id, active=False).all()
+            for ref in indirect_refs:
+                ref_user = User.query.get(ref.user_id)
+                referrer = User.query.get(direct_ref.user_id)
+                if ref_user and referrer:
+                    indirect_referrals.append({
+                        "name": ref_user.full_name,
+                        "date": ref.used_at.strftime("%Y-%m-%d") if ref.used_at else "N/A",
+                        "referred_by": referrer.full_name
+                    })
 
-    #     # Calculate total referrals
-    #     total_referrals = len(direct_referrals) + len(indirect_referrals)
+        # Calculate total referrals
+        total_referrals = len(direct_referrals) + len(indirect_referrals)
 
-    #     return jsonify({
-    #         "status": "success",
-    #         "referral_link": referral_code,
-    #         "direct_referrals": direct_referrals,
-    #         "indirect_referrals": indirect_referrals,
-    #         "total_referrals": total_referrals
-    #     })
-    # except Exception as e:
-    #     logger.error(f"Error generating referral link: {e}")
-    #     return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            "status": "success",
+            "referral_link": referral_code,
+            "direct_referrals": direct_referrals,
+            "indirect_referrals": indirect_referrals,
+            "total_referrals": total_referrals
+        })
+    except Exception as e:
+        logger.error(f"Error generating referral link: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @routes_bp.route("/request_teleclass_access", methods=["POST"])
 def request_teleclass_access():

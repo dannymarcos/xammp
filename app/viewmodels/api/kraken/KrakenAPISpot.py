@@ -43,44 +43,84 @@ class KrakenAPISpot(KrakenAPI):
       logger.error(f"Error getting account balance: {e}")
       return {"error": str(e)}, 500
     
-  def add_order(self, order_type, order_direction, volume, symbol, price):
+  def add_order(self, order_type, order_direction, volume, symbol, price=0, order_made_by="user", money_wanted_to_spend=None):
         try:
+            if order_made_by not in ["bot", "user"]:
+                return {"error": ["order_made_by must be either 'bot' or 'user'"]}, 400
+            
+            # format symbol
+            # find usd starting index
+            """ usd_index = symbol.find("USD")
+            if usd_index == -1:
+                return {"error": ["Invalid symbol"]}, 400
+            
+            # add / before usd
+            symbol = symbol[:usd_index] + "/" + symbol[usd_index:] """
+            
             endpoint = "/0/private/AddOrder"
             full_url = self._base_url + endpoint
             nonce = self.get_nonce()
 
-            volume = 10
-            symbol = "USDTUSD"
-            type = "buy"
-            price = 0.99
-            money_spent = float(volume) * float(price)
-            print(f"money spent: {money_spent}")
+            if price == 0:
+                # get price from kraken
+                price, _ = self.get_symbol_price(symbol)
+                if price.get("error"):
+                    return price, 404
+                else:
+                    price = price["price"]
+
+            if money_wanted_to_spend:
+                # calculate volume
+                volume = float(money_wanted_to_spend) / price
+
+            stop_loss = self.calculate_stop_loss(price) # TODO: implement stop loss
+            take_profit = self.calculate_take_profit(price) # TODO: implement take profit
+            
+    
             arguments = {
                 "nonce": nonce,
                 "ordertype": "market",
-                "type": type,
+                "type": order_direction,
                 "pair": symbol,
                 "volume": volume,
                 "price": price,
             }
+
             body = json.dumps(arguments)
-            print("A")
+        
             headers = {
                 "Content-Type": "application/json",
                 "API-Key": self._api_key,
                 "API-Sign": self.get_signature(body, nonce, endpoint),
             }
-            logger.info(f"😀 Sending request to {full_url} \n with body {body}")
+            # logger.info(f"😀 Sending request to {full_url} \n with body {body}")
             response = requests.request("POST", full_url, data=body, headers=headers)
             data = response.json()
-
-            print("AAAAAAA")
-            print(data)
             
             if data["error"]:
                 return {"error": data["error"] }, 400
-                        
-            return data, 200
+            
+            result = data["result"] 
+            
+            order_to_save = {
+              "order_type": order_type,
+              "order_direction": order_direction,
+              "volume": volume,
+              "symbol": symbol,
+              "price": price,
+              "by": order_made_by,
+              "order_close_condition": result.get("descr").get("close"),
+              "order_description": result.get("descr").get("order"),
+              "order_id": result.get("txid")[0],
+              "user_id": self.user_id,
+              "stop_loss": stop_loss,
+              "take_profit": take_profit
+            }
+
+            order_saved = self.add_order_to_db(order_to_save)
+            if not order_saved:
+                return {"error": "Error saving order to database"}, 500            
+            return order_saved, 200
         except Exception as e:
             traceback.print_exc()
             return {"error": str(e)}, 400

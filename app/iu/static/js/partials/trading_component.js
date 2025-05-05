@@ -2,14 +2,54 @@
     const API_ENDPOINTS = {
         getBalance: '/get_account_balance',
         addOrder: '/add_order',
-        getSymbolPrice: '/get_symbol_price'
+        getSymbolPrice: '/get_symbol_price',
+        getUserTrades: '/trades',
     };
 
         // Get settings from localStorage, fallback to defaults
     const getTradingSymbol = () => localStorage.getItem('symbol') || 'XBTUSD';
     const getTradingMode = () => localStorage.getItem('method') || 'spot';
 
+ // --- Helper Functions ---
+function showAlert(message, type = 'info') {
+    // Simple alert for now, can be replaced with a nicer notification system
+    alert(`[${type.toUpperCase()}] ${message}`);
+}
 
+
+function renderUserTrades(trades) {
+    const tbody = document.getElementById('user-trade-history-body');
+    
+    if (!trades || trades.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="11" class="text-center">${getTranslatedText('No trades found')}</td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = trades.map(trade => {
+        const directionClass = trade.order_direction === 'buy' ? 'text-success' : 'text-danger';
+        const formattedDate = trade.timestamp ? new Date(trade.timestamp).toLocaleString() : 'N/A';
+        
+        return `
+        <tr>
+            <td>${formattedDate}</td>
+            <td>${trade.order_type || 'N/A'}</td>
+            <td class="${directionClass}">${trade.order_direction?.toUpperCase() || ''}</td>
+            <td>${trade.symbol || ''}</td>
+            <td class="text-end">${trade.price ? parseFloat(trade.price).toFixed(2) : '0.00'}</td>
+            <td class="text-end">${trade.volume ? parseFloat(trade.volume).toFixed(4) : '0.0000'}</td>
+            <td>${trade.status || ''}</td>
+            <td class="text-end">${trade.stop_loss ? parseFloat(trade.stop_loss).toFixed(2) : '-'}</td>
+            <td class="text-end">${trade.take_profit ? parseFloat(trade.take_profit).toFixed(2) : '-'}</td>
+            <td>${trade.order_close_condition || ''}</td>
+            <td title="${trade.comment || ''}">${trade.comment ? trade.comment.substring(0, 15) + (trade.comment.length > 15 ? '...' : '') : ''}</td>
+        </tr>
+        `;
+    }).join('');
+}
 
 function updateAvailableOptionsToBuy(balance) {
     const availableCurrencies = Object.keys(balance).filter(currency => currency !== 'ZUSD' && currency !== 'XXBT');
@@ -32,10 +72,8 @@ function updateAvailableOptionsToSell(balance) {
     // Filter for crypto assets (typically prefixed with 'X' in Kraken API)
     // We want to show crypto assets that can be sold
     const availableCryptos = Object.keys(balance).filter(currency => 
-        // Include currencies that start with 'X' (crypto in Kraken API) or other known cryptos
-        // Exclude fiat currencies like 'ZUSD'
-        (currency.startsWith('X') || ['BTC', 'ETH', 'SOL', 'XBT'].includes(currency)) && 
-        currency !== 'ZUSD'
+        // Exclude fiat currencies like 'USDT'
+        !currency.includes("USD")
     );
     
     const sellCurrencySelect = document.getElementById('sell-currency');
@@ -120,6 +158,17 @@ function updateSellAvailableBalance(availableBalance, currencySymbol) {
     }
 }
 
+async function fetchUserTrades() {
+    try {
+        const res = await fetch(API_ENDPOINTS.getUserTrades);
+        const data = await res.json();
+        return data.trades
+    } catch (error) {
+        showAlert('Error fetching trades', 'error');
+        console.error('Error fetching trades:', error);
+    }
+}
+
 async function fetchAccountBalance() {
     setTimeout(() => {
         console.log('Fetching account balance...');
@@ -187,6 +236,22 @@ function updateCurrentAvailableBalance(availableBalance, currencySymbol) {
     buyAvblSpan.setAttribute('data-amount', availableBalance);
 }
 
+function calculateAmountToBuy(e) {
+    const amountOfCurrency = parseFloat(e.target.value); // money => USD | USDT | EUR
+    let price = document.getElementById('buy-price-currency').textContent;
+
+    let currentCurrencySymbol = getTradingSymbol();
+    // remove USD/USDT/EUR if exits
+    currentCurrencySymbol = currentCurrencySymbol.replace(/USD|USDT|EUR/g, '');
+    
+    // remove currency symbol and convert to number
+    price.replace(/[^\d.]/g, '');
+    price = parseFloat(price);
+
+    const total = amountOfCurrency / price;
+    document.getElementById('buy-amount-recived').textContent = `${total} ${currentCurrencySymbol}`;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
 
     // --- UI Element References ---
@@ -204,12 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sellButton = document.querySelector('#spot-tab-pane .col-lg-6:nth-child(2) .btn-danger');
     // TODO: Add references for Max Sell, Est Fee if needed later
 
-    // --- Helper Functions ---
-    function showAlert(message, type = 'info') {
-        // Simple alert for now, can be replaced with a nicer notification system
-        alert(`[${type.toUpperCase()}] ${message}`);
-    }
-
+   
     // --- API Functions ---
     async function renderAccountBalance() {
         try {
@@ -222,8 +282,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // NOTE: Adjust the keys based on the actual API response structure
             // Example assumes response like: { result: { ZUSD: '1000.00', XXBT: '0.5' } } or similar
             // Kraken uses 'Z' prefix for fiat (like ZUSD) and 'X' prefix for crypto (like XXBT for BTC)
-            const quoteCurrency = 'ZUSD'; // Assuming USDT is represented as ZUSD in Kraken API balance
-            const baseCurrency = 'XXBT'; // Assuming BTC is represented as XXBT
+            const quoteCurrency = 'USD'; // Assuming USDT is represented as ZUSD in Kraken API balance
+            const baseCurrency = 'XBT'; // Assuming BTC is represented as XXBT
             const quoteCurrencyAvailableBalance = balance[quoteCurrency]
             const baseCurrencyAvailableBalance = balance[baseCurrency]
             const availableCurrencies = Object.keys(balance).filter(currency => currency !== quoteCurrency && currency !== baseCurrency);
@@ -246,13 +306,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function placeOrder(direction) {
         const isBuy = direction === 'buy';
-        const volumeInput = isBuy ? buyTotalInput : sellAmountInput;
-        const volume = volumeInput.value;
-
-        if (!volume || parseFloat(volume) <= 0) {
-            showAlert('Please enter a valid amount/total.', 'warning');
-            return;
+        const volumeInput = sellAmountInput;
+        const volume = sellAmountInput.value;
+        let moneyWantedToSpend = 0;
+        if (isBuy) {
+            moneyWantedToSpend = buyTotalInput.value; // example 10 USD
+            if (!moneyWantedToSpend) showAlert('Please enter a valid amount of USD to spend.', 'warning');
+        } else {
+            if (!volume || volume <= 0) showAlert('Please enter a valid amount to sell.', 'warning');
         }
+       
 
         // Note: For a market buy order, Kraken often expects the amount in the *quote* currency (e.g., USDT amount to spend).
         // For a market sell order, it expects the amount in the *base* currency (e.g., BTC amount to sell).
@@ -264,8 +327,11 @@ document.addEventListener('DOMContentLoaded', () => {
             orderDirection: direction,
             volume: volume,
             symbol: getTradingSymbol(), // Use dynamic symbol
-            trading_mode: getTradingMode() // Use dynamic mode
+            trading_mode: getTradingMode(), // Use dynamic mode
             // price: null // Not needed for market order
+            return_all_trades: true,
+            order_made_by: 'user',
+            money_wanted_to_spend: moneyWantedToSpend
         };
 
         console.info(`Placing ${direction} order:`, orderData);
@@ -286,19 +352,25 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             const result = await response.json(); // Expecting JSON response
-
-            if (!response.ok || (result && result.error && result.error.length > 0)) {
+            const errorIsNonEmptyArray = Array.isArray(result?.error) && result?.error?.length > 0;
+            const errorIsNonEmptyString = result?.error?.length > 0;
+            if (!response.ok || errorIsNonEmptyArray || errorIsNonEmptyString) {
+                 let errorMessage = `HTTP error! status: ${response.status}`;
                  // Kraken API often returns errors in an 'error' array
-                const errorMessage = (result && result.error) ? result.error.join(', ') : `HTTP error! status: ${response.status}`;
+                 if(Array.isArray(result.error)) errorMessage = result.error.join(', ');
+                 else errorMessage = result.error;
+               
                 throw new Error(errorMessage);
             }
-
+            
+            console.log({result});
             console.log('Order placement result:', result);
             showAlert(`${direction.charAt(0).toUpperCase() + direction.slice(1)} order placed successfully!`, 'success');
 
             // Clear input and refresh balance
             volumeInput.value = '';
             renderAccountBalance(); // Refresh balance after successful order
+            renderUserTrades(result.all_trades);
 
         } catch (error) {
             console.error(`Error placing ${direction} order:`, error);
@@ -323,8 +395,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('Sell button not found');
     }
 
+    buyTotalInput.addEventListener('input', calculateAmountToBuy);
+
     // --- Initial Load ---
     renderAccountBalance();
+    fetchUserTrades().then(renderUserTrades);
     
     // Update market price with the current trading symbol
     const currentSymbol = getTradingSymbol();

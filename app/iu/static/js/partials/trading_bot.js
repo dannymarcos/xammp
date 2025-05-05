@@ -121,15 +121,17 @@ function updateStatusBadge(status) {
  */
 function updateBotUI(status) {
     // Update individual UI components
-    updateToggleButton(status);
-    updateStatusBadge(status);
+    console.log({status});
+    updateToggleButton(status.bot_status);
+    updateStatusBadge(status.bot_status);
+    updateErrorMessage(status.last_error_message || "");
     
     // Update state and configuration inputs
-    if (status.includes("running")) {
+    if (status.bot_status.includes("running")) {
         state.isBotRunning = true;
         toggleConfigInputs(false);
     } 
-    else if (!status.includes("loading")) {
+    else if (!status.bot_status.includes("loading")) {
         state.isBotRunning = false;
         toggleConfigInputs(true);
     }
@@ -167,11 +169,27 @@ async function getBotStatus() {
     try {
         const response = await fetch("/bot/status");
         const data = await response.json();
-        return data.bot_status;
+        return {
+            bot_status: data.bot_status,
+            last_error_message: data.last_error_message
+        };
     } catch (error) {
         console.error("Error fetching bot status:", error);
-        return "error";
+        return {
+            bot_status: "error",
+            last_error_message: getTranslatedText("Error fetching bot status")
+        };
     }
+}
+
+/**
+ * Updates the last error message in the UI
+ * @param {string} message - The error message to display
+ */
+function updateErrorMessage(message) {
+    const errorMessageSpan = getElement("last_error_message");
+    if (!errorMessageSpan) return;
+    errorMessageSpan.textContent = getTranslatedText(message);
 }
 
 /**
@@ -180,7 +198,7 @@ async function getBotStatus() {
  */
 async function getTrades() {
     try {
-        const response = await fetch("/trades");
+        const response = await fetch("/trades?by=bot");
         const data = await response.json();
         return data.trades || [];
     } catch (error) {
@@ -216,11 +234,11 @@ async function startBot() {
         }
         
         // Update UI with the new status
-        updateBotUI(data.bot_status);
+        updateBotUI(data);
         
     } catch (error) {
         console.error("Error starting trading bot:", error);
-        updateBotUI("error");
+        updateBotUI({bot_status: "error"});
     }
 }
 
@@ -244,11 +262,11 @@ async function stopBot() {
         }
         
         // Update UI with the new status
-        updateBotUI(data.bot_status);
+        updateBotUI(data);
         
     } catch (error) {
         console.error("Error stopping trading bot:", error);
-        updateBotUI("error");
+        updateBotUI({bot_status: "error"});
     }
 }
 
@@ -382,14 +400,18 @@ function renderTrades(trades) {
         const newestBadge = isNewest && hasNewTrade 
             ? `<span class="badge bg-success ms-2">${getTranslatedText('New')}</span>` 
             : '';
-        
         row.innerHTML = `
-            <td>${trade.by || 'System'} ${newestBadge}</td>
+            <td>${trade.order_type || 'N/A'} ${newestBadge}</td>
             <td>${formattedDate}</td>
             <td class="${directionClass}">${trade.order_direction?.toUpperCase() || ''}</td>
             <td>${trade.symbol || ''}</td>
-            <td class="text-end">${formattedPrice}</td>
-            <td class="text-end">${trade.volume || '0'}</td>
+            <td class="text-end">${trade.price ? parseFloat(trade.price).toFixed(2) : '0.00'}</td>
+            <td class="text-end">${trade.volume ? parseFloat(trade.volume).toFixed(4) : '0.0000'}</td>
+            <td>${trade.status || ''}</td>
+            <td class="text-end">${trade.stop_loss ? parseFloat(trade.stop_loss).toFixed(2) : '-'}</td>
+            <td class="text-end">${trade.take_profit ? parseFloat(trade.take_profit).toFixed(2) : '-'}</td>
+            <td>${trade.order_close_condition || ''}</td>
+            <td title="${trade.comment || ''}">${trade.comment ? trade.comment.substring(0, 15) + (trade.comment.length > 15 ? '...' : '') : ''}</td>
         `;
         
         fragment.appendChild(row);
@@ -423,7 +445,8 @@ function renderTrades(trades) {
  */
 async function toggleBot() {
     // Show loading state
-    updateBotUI("loading");
+    updateBotUI({
+        bot_status: "loading",});
     
     // Start or stop the bot based on current state
     if (state.isBotRunning) {
@@ -450,7 +473,7 @@ async function initTradingBot() {
     toggleBotButton.addEventListener("click", toggleBot);
     
     // Fetch and render initial trade history
-    const trades = await getTrades();
+    const trades = await getTrades("bot");
     renderTrades(trades);
     
     // Set up interval to refresh trade history if bot is running
