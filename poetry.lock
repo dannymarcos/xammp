@@ -1831,6 +1831,24 @@ test = ["hypothesis (>=6.46.1)", "pytest (>=7.3.2)", "pytest-xdist (>=2.2.0)"]
 xml = ["lxml (>=4.9.2)"]
 
 [[package]]
+name = "pandas-ta"
+version = "0.3.14b"
+description = "An easy to use Python 3 Pandas Extension with 130+ Technical Analysis Indicators. Can be called from a Pandas DataFrame or standalone like TA-Lib. Correlation tested with TA-Lib."
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "pandas_ta-0.3.14b.tar.gz", hash = "sha256:0fa35aec831d2815ea30b871688a8d20a76b288a7be2d26cc00c35cd8c09a993"},
+]
+
+[package.dependencies]
+pandas = "*"
+
+[package.extras]
+dev = ["alphaVantage-api", "matplotlib", "mplfinance", "scipy", "sklearn", "statsmodels", "stochastic", "talib", "tqdm", "vectorbt", "yfinance"]
+test = ["ta-lib"]
+
+[[package]]
 name = "propcache"
 version = "0.3.1"
 description = "Accelerated property cache"
@@ -3128,4 +3146,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "c1e5a5b62021459d6c3f6758e464c8994a4f440e3b0a196f3de70b22946f51a3"
+content-hash = "9aee3932e771858db17336a132c65e6d6f133f60ffbc84e0b73ffeac0c208a55"
