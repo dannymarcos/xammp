@@ -6,17 +6,24 @@ import time
 import traceback
 from datetime import datetime
 from threading import Lock, Thread
-from typing import Dict, Literal, Optional, List, Tuple, Any
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import ccxt
 import pandas as pd
+
 # pandas_ta ya no se importa
 # import pandas_ta as ta
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
-from app.viewmodels.api.kraken.KrakenAPI import KrakenAPI
-from app.models.trades import get_open_trades_from_user
+
+from app.models.trades import (
+    get_open_trades_from_user,
+    set_trade_actual_profit,
+    set_trade_actual_profit_in_usd,
+    update_trade_status,
+)
 from app.models.users import add_last_error_message
+from app.viewmodels.api.kraken.KrakenAPI import KrakenAPI
 
 # Assuming these modules exist and work as before
 # from app.models.trades import get_open_trades_from_user
@@ -489,7 +496,7 @@ class KrakenTradingBot:
                 cls._instances[user_id] = super().__new__(cls)
             return cls._instances[user_id]
 
-    def __init__(self, user_id, kraken_api: KrakenAPI, api_key: str, api_secret: str, config: Dict):
+    def __init__(self, user_id, kraken_api: KrakenAPI, api_key: str, api_secret: str, config: Dict, app_context_param = None):
         if hasattr(self, '_initialized'):
             # logger.debug(f"Bot instance for user {user_id} already initialized, skipping initialization") # Can be noisy
             return
@@ -887,7 +894,6 @@ class KrakenTradingBot:
         # Also prevent buying if max trades are open, logs this in execute_strategy, no need to change signal here.
         # The check `len(self.active_trades) >= self.config.max_active_trades` is done in _execute_strategy
 
-
         return final_aggregated_signals, q_state, contributing_strategies
 
 
@@ -910,33 +916,50 @@ class KrakenTradingBot:
                  logger.info(f"➡️ BUY signal received. Attempting to create BUY order.")
                  # In a real bot, you'd use a Limit or Market order based on strategy
                  # Using 'market' as per original code, price param is indicative but not used by exchange for market orders
-                 order_result = self._create_order('buy', current_price)
-                 if order_result and 'id' in order_result:
-                     order_id = order_result['id']
-                     # Simulate getting the actual fill price for a market order
-                     # In reality, you'd fetch the order status to get the filled price
-                     # For this mock, we use the simulated price from MockKrakenAPI
-                     actual_fill_price = order_result.get('price', current_price) # Use simulated price if available
+                 order_result = self._create_order('buy', current_price) # order_result is the serialized DB Trade record
+                 if order_result and order_result.get('id') and order_result.get('order_id'): # Check for DB PK and Exchange ID
+                     db_trade_id = order_result['id'] # Database Primary Key
+                     exchange_order_id = order_result['order_id'] # Exchange's Transaction ID
+                     
+                     actual_fill_price = order_result.get('price', current_price) # Price from DB record
+                     trade_amount = order_result.get('volume', self.config.trade_amount) # Volume from DB record
+                     
+                     # Parse timestamp if it's a string
+                     entry_time_str = order_result.get('timestamp')
+                     entry_time_dt = datetime.now() # Fallback
+                     if isinstance(entry_time_str, str):
+                         try:
+                             # Attempt to parse ISO format, common for DBs
+                             entry_time_dt = datetime.fromisoformat(entry_time_str.replace('Z', '+00:00'))
+                         except ValueError:
+                             try:
+                                # Fallback for other common formats if needed, or log warning
+                                entry_time_dt = datetime.strptime(entry_time_str, '%Y-%m-%d %H:%M:%S.%f')
+                             except ValueError:
+                                 logger.warning(f"Could not parse timestamp string: {entry_time_str}. Using current time.")
+                     elif isinstance(entry_time_str, datetime):
+                        entry_time_dt = entry_time_str
+
 
                      # Store details of the new active trade
                      trade_details: Dict[str, Any] = {
-                         'id': order_id,
-                         'order_direction': 'buy', # Track if it was originally a buy or sell trade (for futures)
-                         'symbol': self.config.trading_pair,
-                         'entry_price': actual_fill_price, # Record actual fill price
-                         'entry_time': datetime.now(),
-                         'stop_loss': actual_fill_price * (1 - self.config.stop_loss_pct), # Calculate SL/TP based on fill price
-                         'take_profit': actual_fill_price * (1 + self.config.take_profit_pct),
-                         'entry_state': q_state, # Store the Q-learning state at entry
-                         'amount': self.config.trade_amount, # Store the intended amount (base currency)
-                         # Add other relevant details like fees if available from order response
+                         'id': exchange_order_id, # Exchange's transaction ID for logging/display
+                         'db_trade_id': db_trade_id, # Our database's primary key for this BUY trade
+                         'order_direction': 'buy',
+                         'symbol': order_result.get('symbol', self.config.trading_pair),
+                         'entry_price': actual_fill_price,
+                         'entry_time': entry_time_dt,
+                         'stop_loss': order_result.get('stop_loss', actual_fill_price * (1 - self.config.stop_loss_pct)), # Use DB SL or calculate
+                         'take_profit': order_result.get('take_profit', actual_fill_price * (1 + self.config.take_profit_pct)), # Use DB TP or calculate
+                         'entry_state': q_state,
+                         'amount': trade_amount,
                      }
                      self.active_trades.append(trade_details)
-                     print(f"🎉 TRADE OPENED: BUY {trade_details.get('amount', 'N/A'):.6f} {self.config.trading_pair} at {actual_fill_price:.6f} (ID: {order_id})")
-                     logger.info(f"✅ BUY order placed and tracked: {order_id}. Entry Price: {actual_fill_price:.6f}, Amount: {trade_details.get('amount', 'N/A')}")
+                     print(f"🎉 TRADE OPENED: BUY {trade_amount:.6f} {self.config.trading_pair} at {actual_fill_price:.6f} (Exchange ID: {exchange_order_id}, DB ID: {db_trade_id})")
+                     logger.info(f"✅ BUY order placed and tracked: Exchange ID {exchange_order_id}, DB ID {db_trade_id}. Entry Price: {actual_fill_price:.6f}, Amount: {trade_amount}")
 
                  else:
-                      logger.warning("❌ Failed to create BUY order.")
+                      logger.warning(f"❌ Failed to create BUY order or order_result malformed: {order_result}")
                       # An error message would have been added in _create_order
 
 
@@ -962,19 +985,20 @@ class KrakenTradingBot:
                  amount_to_sell = trade.get('amount', self.config.trade_amount)
 
                  # Use current_price as the target price for the sell order
-                 order_result = self._create_order('sell', current_price)
+                 order_result = self._create_order('sell', current_price) # This is the serialized SELL DB record
 
-                 if order_result and 'id' in order_result:
-                     sell_order_id = order_result['id']
-                     # Simulate getting the actual fill price for the sell order
-                     actual_exit_price = order_result.get('price', current_price) # Use simulated price if available
+                 if order_result and order_result.get('id') and order_result.get('order_id'):
+                     sell_db_id = order_result['id'] # DB PK of the SELL order
+                     sell_exchange_id = order_result['order_id'] # Exchange ID of the SELL order
+                     
+                     actual_exit_price = order_result.get('price', current_price) # Actual fill price of the SELL
 
-                     logger.info(f"✅ SELL order placed to close trade {trade_id}: {sell_order_id}")
-                     # Record the trade result and remove from active_trades
-                     # Pass the actual exit price
-                     self._record_trade_result(trade, actual_exit_price, 'sell_signal')
+                     logger.info(f"✅ SELL order (DB ID: {sell_db_id}, Exch ID: {sell_exchange_id}) placed to close BUY trade (Exch ID: {trade_id})")
+                     
+                     # Record the trade result, passing the original BUY trade details and the DB ID of the new SELL trade
+                     self._record_trade_result(buy_trade_details=trade, exit_price=actual_exit_price, reason='sell_signal', sell_order_db_id=sell_db_id)
+                     
                      # Remove the trade from the live active trades list
-                     # Find the trade in the original list by ID or reference before removing
                      try:
                          self.active_trades.remove(trade)
                      except ValueError:
@@ -1019,12 +1043,16 @@ class KrakenTradingBot:
                     print(f"⚠️ STOP LOSS TRIGGERED for trade {trade_id} at {current_price:.6f} (SL: {stop_loss:.6f})")
                     logger.warning(f"Stop loss triggered for trade {trade_id}")
 
-                    order_result = self._create_order('sell', current_price) # Use current_price as exit price target
+                    order_result = self._create_order('sell', current_price) # This is the serialized SELL DB record
 
-                    if order_result and 'id' in order_result:
-                        actual_exit_price = order_result.get('price', current_price) # Get actual fill price
-                        logger.info(f"✅ SELL order placed for SL: {order_result['id']}")
-                        self._record_trade_result(trade, actual_exit_price, 'stop_loss')
+                    if order_result and order_result.get('id') and order_result.get('order_id'):
+                        sell_db_id = order_result['id'] # DB PK of the SELL order
+                        sell_exchange_id = order_result['order_id'] # Exchange ID of the SELL order
+                        actual_exit_price = order_result.get('price', current_price) # Actual fill price of the SELL
+                        
+                        logger.info(f"✅ SELL order (DB ID: {sell_db_id}, Exch ID: {sell_exchange_id}) placed for SL on BUY trade (Exch ID: {trade_id})")
+                        self._record_trade_result(buy_trade_details=trade, exit_price=actual_exit_price, reason='stop_loss', sell_order_db_id=sell_db_id)
+                        
                         # Remove the trade from the live active trades list
                         try:
                             self.active_trades.remove(trade)
@@ -1041,12 +1069,16 @@ class KrakenTradingBot:
                     print(f"🎯 TAKE PROFIT TRIGGERED for trade {trade_id} at {current_price:.6f} (TP: {take_profit:.6f})")
                     logger.info(f"Take profit triggered for trade {trade_id}")
 
-                    order_result = self._create_order('sell', current_price) # Use current_price as exit price target
+                    order_result = self._create_order('sell', current_price) # This is the serialized SELL DB record
 
-                    if order_result and 'id' in order_result:
-                        actual_exit_price = order_result.get('price', current_price) # Get actual fill price
-                        logger.info(f"✅ SELL order placed for TP: {order_result['id']}")
-                        self._record_trade_result(trade, actual_exit_price, 'take_profit')
+                    if order_result and order_result.get('id') and order_result.get('order_id'):
+                        sell_db_id = order_result['id'] # DB PK of the SELL order
+                        sell_exchange_id = order_result['order_id'] # Exchange ID of the SELL order
+                        actual_exit_price = order_result.get('price', current_price) # Actual fill price of the SELL
+
+                        logger.info(f"✅ SELL order (DB ID: {sell_db_id}, Exch ID: {sell_exchange_id}) placed for TP on BUY trade (Exch ID: {trade_id})")
+                        self._record_trade_result(buy_trade_details=trade, exit_price=actual_exit_price, reason='take_profit', sell_order_db_id=sell_db_id)
+                        
                         # Remove the trade from the live active trades list
                         try:
                             self.active_trades.remove(trade)
@@ -1128,77 +1160,153 @@ class KrakenTradingBot:
             return None
 
 
-    def _record_trade_result(self, trade: Dict[str, Any], exit_price: float, reason: str):
+    def _record_trade_result(self, buy_trade_details: Dict[str, Any], exit_price: float, reason: str, sell_order_db_id: str):
         """
         Records a completed trade, calculates PnL/ROI, updates Q-values, and prints/logs result.
+        Updates actual_profit for the sell trade and status for the buy trade in the database.
         Assumes 'buy' trades being closed by a 'sell'.
         """
-        trade_id = trade.get('id', 'N/A')
-        logger.info(f"Recording trade result for trade ID: {trade_id}")
+        # buy_trade_details contains the info of the original BUY trade from self.active_trades
+        # sell_order_db_id is the database PK of the SELL trade that closed this position
+        
+        original_buy_exchange_id = buy_trade_details.get('id', 'N/A') # Exchange ID of the original buy
+        original_buy_db_trade_id = buy_trade_details.get('db_trade_id', 'N/A') # DB ID of the original buy
 
-        # Ensure required fields are present (added default fallbacks)
-        entry_price = trade.get('entry_price', 0)
-        entry_action = trade.get('order_direction', 'unknown')
-        entry_state = trade.get('entry_state', 'unknown')
-        trade_amount = trade.get('amount', self.config.trade_amount) # Use amount from trade or config
+        logger.info(f"Recording trade result for original BUY trade (Exchange ID: {original_buy_exchange_id}, DB ID: {original_buy_db_trade_id}), closed by SELL trade (DB ID: {sell_order_db_id})")
 
-        # Calculate profit/loss and ROI for a simple spot BUY -> SELL trade
-        # Assuming trade_amount is the base currency amount (e.g., 0.001 BTC)
-        pnl = (exit_price - entry_price) * trade_amount
-        roi = (exit_price - entry_price) / entry_price * 100 if entry_price != 0 else 0 # ROI in percentage
+        # Ensure required fields are present
+        entry_price = buy_trade_details.get('entry_price', 0)
+        entry_action = buy_trade_details.get('order_direction', 'buy') # Should always be 'buy' here
+        entry_state = buy_trade_details.get('entry_state', 'unknown')
+        trade_amount = buy_trade_details.get('amount', self.config.trade_amount)
 
-        # Determine outcome string for printing
-        outcome = "PROFIT" if pnl > 1e-9 else ("LOSS" if pnl < -1e-9 else "BREAKEVEN") # Use tolerance for float comparison
+        if entry_price == 0 or trade_amount == 0:
+            logger.error(f"Cannot calculate PnL for trade {original_buy_exchange_id}: entry_price or trade_amount is zero.")
+            # Potentially skip DB updates if PnL cannot be calculated, or record 0
+            pnl = 0
+            roi = 0
+        else:
+            pnl = (exit_price - entry_price) * trade_amount
+            roi = (exit_price - entry_price) / entry_price * 100 if entry_price != 0 else 0
 
+        outcome = "PROFIT" if pnl > 1e-9 else ("LOSS" if pnl < -1e-9 else "BREAKEVEN")
+
+        # --- Database Updates ---
+        pnl_in_usd: Optional[float] = None
+        usd_equivalent_currencies = ["USD", "USDT", "USDC"]
+        
+        try:
+            pair_details = self.config.trading_pair.split('/')
+            if len(pair_details) == 2:
+                quote_currency = pair_details[1].upper()
+                if quote_currency in usd_equivalent_currencies:
+                    pnl_in_usd = pnl
+                else:
+                    # Attempt to convert to USD
+                    conversion_pair = f"{quote_currency}/USD" # Assumes USD is the target for conversion
+                    # Ensure the conversion pair is valid and different from the trading pair if quote is already USD-like
+                    if quote_currency not in usd_equivalent_currencies: # Redundant check, but safe
+                        try:
+                            ticker = self.exchange.fetch_ticker(conversion_pair)
+                            conversion_rate = ticker.get('last')
+                            if conversion_rate is not None and conversion_rate > 0:
+                                pnl_in_usd = pnl * conversion_rate
+                                logger.info(f"Converted PnL from {quote_currency} to USD: {pnl:.8f} {quote_currency} * {conversion_rate:.6f} = {pnl_in_usd:.2f} USD")
+                            else:
+                                logger.warning(f"Could not get valid conversion rate for {conversion_pair}. Last price: {conversion_rate}. Storing PnL in USD as None.")
+                                pnl_in_usd = None 
+                        except ccxt.BadSymbol:
+                            logger.error(f"Bad symbol for USD conversion: {conversion_pair}. Cannot convert PnL to USD. Storing PnL in USD as None.")
+                            pnl_in_usd = None
+                        except Exception as e:
+                            logger.error(f"Error fetching ticker for USD conversion ({conversion_pair}): {e}. Storing PnL in USD as None.")
+                            pnl_in_usd = None
+                    else: # Should not happen if logic is correct, but handles case where quote_currency was USD-like
+                        pnl_in_usd = pnl
+
+            else: # Should not happen if trading_pair is validated
+                logger.warning(f"Could not determine quote currency from trading pair: {self.config.trading_pair}. Storing PnL in USD as None.")
+                pnl_in_usd = None
+
+        except Exception as e:
+            logger.error(f"Error during PnL to USD conversion logic: {e}. Storing PnL in USD as None.")
+            pnl_in_usd = None
+
+
+        if sell_order_db_id and sell_order_db_id != 'N/A':
+            # Store PnL in quote currency
+            profit_set_quote = set_trade_actual_profit(trade_id=sell_order_db_id, profit=pnl)
+            if profit_set_quote:
+                logger.info(f"Successfully set actual_profit (quote currency)={pnl:.8f} for SELL trade DB ID {sell_order_db_id}")
+            else:
+                logger.error(f"Failed to set actual_profit (quote currency) for SELL trade DB ID {sell_order_db_id}")
+
+            # Store PnL in USD
+            profit_set_usd = set_trade_actual_profit_in_usd(trade_id=sell_order_db_id, profit_in_usd=pnl_in_usd)
+            if profit_set_usd:
+                logger.info(f"Successfully set actual_profit_in_usd={pnl_in_usd if pnl_in_usd is not None else 'N/A'} for SELL trade DB ID {sell_order_db_id}")
+            else:
+                logger.error(f"Failed to set actual_profit_in_usd for SELL trade DB ID {sell_order_db_id}")
+        else:
+            logger.warning("sell_order_db_id not available, cannot set actual_profit or actual_profit_in_usd for the sell trade.")
+
+        if original_buy_db_trade_id and original_buy_db_trade_id != 'N/A':
+            status_updated = update_trade_status(trade_id=original_buy_db_trade_id, new_status='closed')
+            if status_updated:
+                logger.info(f"Successfully updated status to 'closed' for BUY trade DB ID {original_buy_db_trade_id}")
+            else:
+                logger.error(f"Failed to update status for BUY trade DB ID {original_buy_db_trade_id}")
+        else:
+            logger.warning("original_buy_db_trade_id not available, cannot update status for the buy trade.")
+        # --- End Database Updates ---
 
         # Calculate reward for Q-learning
         reward = 0
         if reason == 'take_profit':
             reward = 1.0
-            logger.debug(f"Reward +1.0 for Take Profit on trade {trade_id}.")
+            logger.debug(f"Reward +1.0 for Take Profit on trade {original_buy_exchange_id}.")
         elif reason == 'stop_loss':
             reward = -1.0
-            logger.debug(f"Reward -1.0 for Stop Loss on trade {trade_id}.")
+            logger.debug(f"Reward -1.0 for Stop Loss on trade {original_buy_exchange_id}.")
         elif reason == 'sell_signal':
             # Reward based on PnL for trades closed by a sell signal
             reward = 0.5 if pnl > 0 else (-0.5 if pnl < 0 else 0) # Small positive/negative reward for profit/loss
-            logger.debug(f"Reward {reward} for Sell Signal exit on trade {trade_id} (PnL: {pnl:.6f}).")
+            logger.debug(f"Reward {reward} for Sell Signal exit on trade {original_buy_exchange_id} (PnL: {pnl:.6f}).")
         else:
-             # Default reward for other reasons (shouldn't happen with current logic)
+             # Default reward for other reasons
              reward = 0 # Neutral reward
-             logger.debug(f"Neutral reward for unknown exit reason '{reason}' on trade {trade_id}.")
+             logger.debug(f"Neutral reward for unknown exit reason '{reason}' on trade {original_buy_exchange_id}.")
 
 
         # Update Q-value using the state when the trade was *opened* and the action taken (buy)
-        # Ensure entry_state is valid before attempting update
         if entry_state not in ["unknown", "state_indicators_missing"]:
-             logger.debug(f"Updating Q-table: State='{entry_state}', Action='{entry_action}', Reward={reward} for trade {trade_id}")
-             # Ensure entry_action is valid ('buy', 'sell', 'hold') for Q-table update
-             if entry_action in ['buy', 'sell', 'hold']:
+             logger.debug(f"Updating Q-table: State='{entry_state}', Action='{entry_action}', Reward={reward} for trade {original_buy_exchange_id}")
+             if entry_action in ['buy', 'sell', 'hold']: # Should be 'buy'
                  self.q_table.update_q_value(entry_state, entry_action, reward)
              else:
-                 logger.warning(f"Cannot update Q-table for trade {trade_id}: Invalid entry action '{entry_action}'.")
+                 logger.warning(f"Cannot update Q-table for trade {original_buy_exchange_id}: Invalid entry action '{entry_action}'.")
         else:
-             logger.warning(f"Cannot update Q-table for trade {trade_id}: Unknown or missing entry state.")
+             logger.warning(f"Cannot update Q-table for trade {original_buy_exchange_id}: Unknown or missing entry state.")
 
 
         # Add the completed trade details to the history
         completed_trade: Dict[str, Any] = {
-            **trade, # Include all original trade details
+            **buy_trade_details, # Include all original BUY trade details
             'exit_price': exit_price,
             'exit_time': datetime.now(),
-            'pnl': pnl,
-            'roi': roi,
+            'pnl': pnl, # This PnL is for the completed BUY-SELL cycle
+            'roi': roi, # This ROI is for the completed BUY-SELL cycle
             'exit_reason': reason,
-            # 'config': self.config.model_dump() # Optional: save config used for this trade
+            'closing_sell_db_id': sell_order_db_id, # Store the DB ID of the sell order that closed this
+            # 'config': self.config.model_dump() # Optional
         }
         self.trade_history.append(completed_trade)
 
         # Print/Log the trade completion details
         quote_currency = self.config.trading_pair.split('/')[-1] if '/' in self.config.trading_pair else '???'
-        print(f"✅ TRADE CLOSED: ID={trade_id}, Symbol={self.config.trading_pair}, ExitReason={reason}, "
+        print(f"✅ TRADE CLOSED: Original BUY (Exchange ID={original_buy_exchange_id}, DB ID={original_buy_db_trade_id}), Closed by SELL (DB ID={sell_order_db_id}), Symbol={self.config.trading_pair}, ExitReason={reason}, "
               f"PnL={pnl:.6f} {quote_currency}, ROI={roi:.2f}%, Outcome={outcome}")
-        logger.info(f"Trade completed: ID={trade_id}, Symbol={self.config.trading_pair}, ExitReason={reason}, "
+        logger.info(f"Trade completed: Original BUY (ExID={original_buy_exchange_id}, DB_ID={original_buy_db_trade_id}), Closed by SELL (DB_ID={sell_order_db_id}), Symbol={self.config.trading_pair}, ExitReason={reason}, "
                     f"EntryPrice={entry_price:.6f}, ExitPrice={exit_price:.6f}, "
                     f"Amount={trade_amount:.6f}, PnL={pnl:.6f}, ROI={roi:.2f}%, EntryState='{entry_state}'")
 
@@ -1286,7 +1394,8 @@ def main():
             api_key=api_key,
             api_secret=api_secret,
             kraken_api=kraken_api_instance, # Pass the mock or real API instance
-            config=config
+            config=config,
+
         )
 
         # Handle graceful shutdown signals BEFORE starting the bot thread

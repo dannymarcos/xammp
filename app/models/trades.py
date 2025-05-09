@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 from .create_db import db
 from datetime import datetime
 from .users import User
@@ -22,6 +23,8 @@ class Trade(db.Model):
     stop_loss_percent = db.Column(db.Float)
     take_profit_percent = db.Column(db.Float)
     comment = db.Column(db.String(255))
+    actual_profit = db.Column(db.Float) # Profit in quote currency
+    actual_profit_in_usd = db.Column(db.Float, nullable=True) # Profit in USD
     
     # Relationships
     user = db.relationship('User', backref='trades')
@@ -47,20 +50,87 @@ def get_all_trades_from_user(user_id, by="all"):
     return [trade.serialize for trade in trades]
 
 def get_open_trades_from_user(user_id, by="all"):
-        from main import app_instance
+    from main import app_instance
+    app = app_instance
 
-        app = app_instance
+    if app and hasattr(app, 'app_context'):
+        with app.app_context():
+            if by == "bot":
+                trades = Trade.query.filter_by(user_id=user_id, by="bot", status="open").order_by(Trade.timestamp.desc()).all()
+            elif by == "user":
+                trades = Trade.query.filter_by(user_id=user_id, by="user", status="open").order_by(Trade.timestamp.desc()).all()
+            elif by == "all":
+                trades = Trade.query.filter_by(user_id=user_id, status="open").order_by(Trade.timestamp.desc()).all()
+            else:
+                return [] # Or raise an error for invalid 'by'
+            return [trade.serialize for trade in trades]
+    return [] # Return empty list if app_context is not available
 
-        if app:
-            with app.app_context():
-                if by == "bot":
-                    trades = Trade.query.filter_by(user_id=user_id, by="bot", status="open").order_by(Trade.timestamp.desc()).all()
-                    return [trade.serialize for trade in trades]
-                
-                if by == "user":
-                    trades = Trade.query.filter_by(user_id=user_id, by="user", status="open").order_by(Trade.timestamp.desc()).all()
-                    return [trade.serialize for trade in trades]
-                
-                if by == "all":
-                    trades = Trade.query.filter_by(user_id=user_id, status="open").order_by(Trade.timestamp.desc()).all()
-                    return [trade.serialize for trade in trades]
+def set_trade_actual_profit(trade_id: str, profit: float, app_context=None) -> bool:
+    """
+    Sets the actual_profit for a specific trade.
+    """
+    from main import app_instance
+    app = app_context if app_context else app_instance
+
+    if app and hasattr(app, 'app_context'):
+        with app.app_context():
+            try:
+                trade = Trade.query.get(trade_id)
+                if trade:
+                    trade.actual_profit = profit
+                    db.session.commit()
+                    return True
+                return False
+            except Exception as e:
+                db.session.rollback()
+                # Consider logging the error e.g., app.logger.error(f"Error setting profit for trade {trade_id}: {e}")
+                print(f"Error setting profit for trade {trade_id}: {e}") # Or use proper logging
+                return False
+    return False
+
+def update_trade_status(trade_id: str, new_status: str, app_context=None) -> bool:
+    """
+    Updates the status for a specific trade.
+    """
+    from main import app_instance
+    app = app_context if app_context else app_instance
+
+    if app and hasattr(app, 'app_context'):
+        with app.app_context():
+            try:
+                trade = Trade.query.get(trade_id)
+                if trade:
+                    trade.status = new_status
+                    db.session.commit()
+                    return True
+                return False
+            except Exception as e:
+                db.session.rollback()
+                # Consider logging the error
+                print(f"Error updating status for trade {trade_id}: {e}") # Or use proper logging
+                return False
+    return False
+
+def set_trade_actual_profit_in_usd(trade_id: str, profit_in_usd: Optional[float], app_context=None) -> bool:
+    """
+    Sets the actual_profit_in_usd for a specific trade.
+    """
+    from main import app_instance
+    app = app_context if app_context else app_instance
+
+    if app and hasattr(app, 'app_context'):
+        with app.app_context():
+            try:
+                trade = Trade.query.get(trade_id)
+                if trade:
+                    trade.actual_profit_in_usd = profit_in_usd
+                    db.session.commit()
+                    return True
+                return False
+            except Exception as e:
+                db.session.rollback()
+                # Consider logging the error
+                print(f"Error setting actual_profit_in_usd for trade {trade_id}: {e}") # Or use proper logging
+                return False
+    return False

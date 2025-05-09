@@ -188,7 +188,7 @@ def start_bot_trading():
         
         # Create configuration for the bot
         config = {
-            'trading_pair': data.get('symbol', 'BTC/USD'),
+            'trading_pair': data.get('symbol', 'XBTUSD'),
             'timeframe': data.get('timeframe', '1h'),
             'trade_amount': float(data.get('amount', 0.01)),
             'trading_mode': trading_mode,

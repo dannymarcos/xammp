@@ -57,10 +57,10 @@
                     <div class="form-floating">
                         <select class="form-select" id="bot-timeframe">
                             <option value="1m">1m</option>
-                            <option value="5m">5m</option>
+                            <option value="5m" selected>5m</option>
                             <option value="15m">15m</option>
                             <option value="30m">30m</option>
-                            <option value="1h" selected>1h</option>
+                            <option value="1h">1h</option>
                             <option value="4h">4h</option>
                             <option value="1d">1d</option>
                         </select>
@@ -101,6 +101,8 @@
                             <th>{{ _('Status') }}</th>
                             <th class="text-end">{{ _('Stop Loss') }}</th>
                             <th class="text-end">{{ _('Take Profit') }}</th>
+                            <th class="text-end">{{ _('Actual Profit') }}</th>
+                            <th class="text-end">{{ _('Actual Profit USD') }}</th>
                             <th>{{ _('Close Condition') }}</th>
                             <th>{{ _('Comment') }}</th>
                         </tr>
