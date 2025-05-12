@@ -4,3 +4,4 @@ ema_up_rsi_high,0.45,0.5,0.5
 ema_up_rsi_low,0.5,0.5,0.5
 ema_down_rsi_low,0.4,0.5,0.5
 ema_down_rsi_mid,0.5,0.5,0.5
+ema_down_rsi_high,0.45,0.5,0.5

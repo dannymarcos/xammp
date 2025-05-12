@@ -411,8 +411,6 @@ function renderTrades(trades) {
             <td class="text-end">${trade.price ? parseFloat(trade.price).toFixed(2) : '0.00'}</td>
             <td class="text-end">${trade.volume ? parseFloat(trade.volume).toFixed(4) : '0.0000'}</td>
             <td class="text-end ${trade.status === 'closed' ? 'text-gray' : 'text-success'}">${trade.status || ''}</td>
-            <td class="text-end">${trade.stop_loss ? parseFloat(trade.stop_loss).toFixed(2) : '-'}</td>
-            <td class="text-end">${trade.take_profit ? parseFloat(trade.take_profit).toFixed(2) : '-'}</td>
             <td class="text-end ${actual_profit > 0 ? 'text-success' : 'text-danger'}">${actual_profit}</td>
             <td class="text-end ${actual_profit_usd > 0 ? 'text-success' : 'text-danger'}">${actual_profit_usd}$</td>
             <td>${trade.order_close_condition || ''}</td>
