@@ -12,7 +12,7 @@ class Trade(db.Model):
     order_direction = db.Column(db.String(8))  # 'buy' or 'sell'
     volume = db.Column(db.Float)
     price = db.Column(db.Float)
-    timestamp = db.Column(db.DateTime, default=datetime.now)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow())
     status = db.Column(db.String(16), default="open")
     by = db.Column(db.String(16)) # bot or user
     order_close_condition = db.Column(db.String(16), default="")

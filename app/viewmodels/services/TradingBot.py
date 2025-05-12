@@ -257,6 +257,50 @@ def is_bearish_engulfing_pattern(candle1: pd.Series, candle2: pd.Series) -> bool
     # Basic check: C1 bullish, C2 bearish, C2 body engulfs C1 body
     return is_c1_bullish and is_c2_bearish and engulfs
 
+def is_martillo(candle: pd.Series) -> bool:
+    """Checks if a candle is a Martillo (Hammer) pattern."""
+    # Requires 'open', 'high', 'low', 'close'
+    if not all(k in candle for k in ['open', 'high', 'low', 'close']):
+        return False
+    cuerpo = abs(candle['close'] - candle['open'])
+    sombra_inferior = min(candle['open'], candle['close']) - candle['low']
+    sombra_superior = candle['high'] - max(candle['open'], candle['close'])
+    # Avoid division by zero if body is zero
+    if cuerpo < 1e-9: # Use a small threshold for zero body
+        # A very small body might be considered Doji, not Hammer/Shooting Star
+        # Or, if it has a long lower shadow and negligible upper, could still be hammer-like
+        # Let's stick to the original logic: requires a body for the ratio.
+        return False
+    # Original logic: lower shadow > 2 * body AND upper shadow < body
+    return sombra_inferior > 2 * cuerpo and sombra_superior < cuerpo
+
+def is_estrella_fugaz(candle: pd.Series) -> bool:
+    """Checks if a candle is an Estrella Fugaz (Shooting Star) pattern."""
+    # Requires 'open', 'high', 'low', 'close'
+    if not all(k in candle for k in ['open', 'high', 'low', 'close']):
+        return False
+    cuerpo = abs(candle['close'] - candle['open'])
+    sombra_superior = candle['high'] - max(candle['close'], candle['open'])
+    sombra_inferior = min(candle['close'], candle['open']) - candle['low']
+    # Avoid division by zero if body is zero
+    if cuerpo < 1e-9: # Use a small threshold for zero body
+        return False
+    # Original logic: upper shadow > 2 * body AND lower shadow < body
+    return sombra_superior > 2 * cuerpo and sombra_inferior < cuerpo
+
+def is_doji(candle: pd.Series) -> bool:
+    """Checks if a candle is a Doji pattern."""
+    # Requires 'open', 'high', 'low', 'close'
+    if not all(k in candle for k in ['open', 'high', 'low', 'close']):
+        return False
+    cuerpo = abs(candle['close'] - candle['open'])
+    rango_total = candle['high'] - candle['low']
+    # Avoid division by zero if range is zero (flat candle)
+    if rango_total < 1e-9:
+        return True # A flat candle is essentially a Doji
+    # Original logic: body is less than 10% of the total range
+    return cuerpo < (rango_total * 0.1)
+
 
 # ----------------------------
 # Indicator Calculation Function
@@ -268,12 +312,17 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     Assumes 'open', 'high', 'low', 'close', 'volume' columns exist.
     Calculates EMA, RSI, and Engulfing patterns manually.
     Returns a new DataFrame with indicator columns.
+    Calculates EMA, RSI, Engulfing patterns, Martillo, Estrella Fugaz, and Doji manually.
+    Returns a new DataFrame with indicator columns.
     """
     if df.empty or not all(col in df.columns for col in ['open', 'high', 'low', 'close', 'volume']):
         logger.warning("Input DataFrame is empty or missing required OHLCV columns for indicator calculation.")
         # Return an empty DataFrame with expected columns to avoid downstream errors
-        return pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume',
-                                     'EMA12', 'EMA26', 'RSI', 'bullish_engulfing', 'bearish_engulfing'])
+        expected_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume',
+                         'EMA12', 'EMA26', 'RSI',
+                         'bullish_engulfing', 'bearish_engulfing',
+                         'martillo', 'estrella_fugaz', 'doji']
+        return pd.DataFrame(columns=expected_cols)
 
     df_copy = df.copy() # Work on a copy
 
@@ -293,29 +342,44 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df_copy['RSI'] = calculate_rsi_series(df_copy['close'], 14)
 
 
-    # --- Manual Candlestick Pattern Calculation (Engulfing) ---
+    # --- Manual Candlestick Pattern Calculation ---
     df_copy['bullish_engulfing'] = False
     df_copy['bearish_engulfing'] = False
+    df_copy['martillo'] = False
+    df_copy['estrella_fugaz'] = False
+    df_copy['doji'] = False
 
-    if len(df_copy) >= 2:
-        # Iterate from the second candle to calculate patterns
-        # Use .loc for assignment to avoid SettingWithCopyWarning
-        for i in range(1, len(df_copy)):
-            candle1 = df_copy.iloc[i-1]
-            candle2 = df_copy.iloc[i]
-            if is_bullish_engulfing_pattern(candle1, candle2):
+    # Iterate through candles to calculate patterns
+    # Engulfing requires looking at the previous candle (start from index 1)
+    # Martillo, Estrella Fugaz, Doji only need the current candle (can start from index 0)
+    for i in range(len(df_copy)):
+        current_candle = df_copy.iloc[i]
+
+        # Calculate single-candle patterns
+        if is_martillo(current_candle):
+            df_copy.loc[df_copy.index[i], 'martillo'] = True
+        if is_estrella_fugaz(current_candle):
+            df_copy.loc[df_copy.index[i], 'estrella_fugaz'] = True
+        if is_doji(current_candle):
+            df_copy.loc[df_copy.index[i], 'doji'] = True
+
+        # Calculate two-candle patterns (Engulfing)
+        if i > 0: # Need a previous candle
+            prev_candle = df_copy.iloc[i-1]
+            if is_bullish_engulfing_pattern(prev_candle, current_candle):
                 df_copy.loc[df_copy.index[i], 'bullish_engulfing'] = True
-            if is_bearish_engulfing_pattern(candle1, candle2):
+            if is_bearish_engulfing_pattern(prev_candle, current_candle):
                 df_copy.loc[df_copy.index[i], 'bearish_engulfing'] = True
-    else:
-         logger.debug("Not enough data for Engulfing pattern calculation.")
 
 
     # Drop rows where primary indicators (like EMA26 or RSI) are NaN due to insufficient data
     # Keep original columns + calculated indicators
     initial_cols = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
     indicator_cols_to_check_na = ['EMA26', 'RSI'] # Use indicators that require more data for dropping rows
-    all_cols = initial_cols + [col for col in ['EMA12', 'EMA26', 'RSI', 'bullish_engulfing', 'bearish_engulfing'] if col in df_copy.columns]
+    calculated_indicator_cols = ['EMA12', 'EMA26', 'RSI',
+                                 'bullish_engulfing', 'bearish_engulfing',
+                                 'martillo', 'estrella_fugaz', 'doji']
+    all_cols = initial_cols + [col for col in calculated_indicator_cols if col in df_copy.columns]
 
     # Drop NA only in the specified indicator columns to keep valid rows where calculations were possible
     df_copy.dropna(subset=indicator_cols_to_check_na, inplace=True)
@@ -450,6 +514,32 @@ def strategy_manual_engulfing_threshold(df: pd.DataFrame) -> Dict[str, bool]:
     return signals
 
 
+def strategy_basic_candlesticks(df: pd.DataFrame) -> Dict[str, bool]:
+    """
+    Generates signals based on simple candlestick patterns (Martillo, Estrella Fugaz).
+    Requires 'martillo', 'estrella_fugaz' columns in the DataFrame.
+    """
+    signals = {'buy': False, 'sell': False}
+
+    # Need at least 1 row and valid pattern columns for the last row
+    if df.empty or not all(col in df.columns for col in ['martillo', 'estrella_fugaz']):
+        return signals
+
+    last = df.iloc[-1]
+
+    # Check for Buy Signal (Martillo)
+    if last['martillo']:
+        signals['buy'] = True
+
+    # Check for Sell Signal (Estrella Fugaz)
+    if last['estrella_fugaz']:
+        signals['sell'] = True
+
+    # Doji currently generates no signal in this basic strategy
+
+    return signals
+
+
 # ----------------------------
 # Configuration Models
 # ----------------------------
@@ -459,8 +549,8 @@ class TradingConfig(BaseModel):
     Validated trading configuration using Pydantic
     """
     trading_pair: str = Field("XBT/USD", description="Trading pair (e.g., BTC/USD)")
-    timeframe: str = Field("1h", description="Chart timeframe (1m, 1h, 1d)")
-    trade_amount: float = Field(0.001, gt=0, description="Base trade amount in quote currency") # Assume base currency amount
+    timeframe: str = Field("5m", description="Chart timeframe (1m, 1h, 1d)")
+    trade_amount: float = Field(0.0001, gt=0, description="Base trade amount in quote currency") # Assume base currency amount
     trading_mode: Literal['spot', 'futures'] = Field("spot", description="Trading account type")
     max_active_trades: int = Field(1, ge=1, description="Maximum concurrent positions")
     stop_loss_pct: float = Field(0.02, gt=0, lt=0.5, description="Stop loss percentage (0.02 = 2%)")
@@ -864,6 +954,15 @@ class KrakenTradingBot:
         if engulf_signals['sell']:
              aggregated_signals['sell'] = True
              contributing_strategies['sell'].append('Manual_Engulfing_Threshold')
+
+        # Basic Candlestick Strategy (Martillo, Estrella Fugaz)
+        basic_candle_signals = strategy_basic_candlesticks(df)
+        if basic_candle_signals['buy']:
+             aggregated_signals['buy'] = True
+             contributing_strategies['buy'].append('Basic_Candlesticks')
+        if basic_candle_signals['sell']:
+             aggregated_signals['sell'] = True
+             contributing_strategies['sell'].append('Basic_Candlesticks')
 
 
         # Aggregate signals using simple OR logic across all strategies.
