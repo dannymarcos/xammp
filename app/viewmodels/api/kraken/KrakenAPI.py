@@ -15,12 +15,13 @@ import hashlib
 import hmac
 import base64
 import time
+import os
+import threading
 import json
 import traceback
 from pydantic import BaseModel
 from app.models.trades import Trade
 from app.models.create_db import db
-
 
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,12 @@ class TradingData(BaseModel):
 
 
 class KrakenAPI:
+    # Lock for thread safety when accessing the nonce file
+    _nonce_lock = threading.Lock()
+    # Path to the file that stores the last used nonce for this base class instance
+    # Using a different file name to avoid conflict with the specific spot implementation's file
+    _nonce_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'kraken_base_nonce.txt')
+
     def __init__(self, user_id, trading_mode = "spot", base_url = "https://api.kraken.com"):
         self.user_id = user_id
         self._base_url = base_url
@@ -42,6 +49,11 @@ class KrakenAPI:
         self._api_secret = settings.KRAKEN_API_SECRET
         self.trading_mode = trading_mode
         self._add_order_endpoint = f"{self._base_url}/0/private/AddOrder"
+        # Ensure nonce file path is instance-specific if needed, or manage centrally
+        # For simplicity here, we use a single file defined at class level.
+        # Consider if different instances (e.g., different users) need separate nonce files.
+        self._nonce_file = KrakenAPI._nonce_file_path 
+
 
     def get_creds_from_user(self, user_id):
         # TODO: implement
@@ -127,7 +139,63 @@ class KrakenAPI:
             return {"error": str(e)}, 400
 
     def get_nonce(self) -> str:
-        return str(int(time.time() * 1000))
+        """Reads the last nonce, calculates the next one, writes it back, and returns it."""
+        # Use the instance's nonce file path
+        nonce_file = self._nonce_file 
+        with KrakenAPI._nonce_lock: # Use the class-level lock
+            last_nonce = 0
+            current_time_nonce = int(time.time() * 1_000_000) # Get current time early
+
+            try:
+                # Ensure file exists before reading
+                if not os.path.exists(nonce_file):
+                    # logger.info(f"Nonce file not found. Creating '{nonce_file}' with initial nonce.")
+                    # Initialize file with a nonce slightly less than current time to ensure the first generated nonce is valid
+                    initial_nonce = current_time_nonce - 1 
+                    with open(nonce_file, 'w') as f:
+                        f.write(str(initial_nonce))
+                    last_nonce = initial_nonce
+                else:
+                    # Read the last nonce from the existing file
+                    with open(nonce_file, 'r') as f:
+                        content = f.read().strip()
+                        if content:
+                            try:
+                                last_nonce = int(content)
+                                logger.debug(f"Read last_nonce {last_nonce} from file '{nonce_file}'.")
+                            except ValueError:
+                                logger.error(f"Invalid content in nonce file '{nonce_file}': '{content}'. Using current time as fallback.")
+                                last_nonce = current_time_nonce # Fallback if content is invalid
+                        else:
+                            # Handle empty file case - should ideally not happen with the creation logic above
+                            logger.warning(f"Nonce file '{nonce_file}' was empty. Initializing with current time.")
+                            last_nonce = current_time_nonce # Fallback if file is empty
+            except IOError as e:
+                logger.error(f"IOError accessing nonce file '{nonce_file}': {e}")
+                # Fallback to current time in microseconds if file access fails
+                last_nonce = current_time_nonce
+            except Exception as e:
+                logger.error(f"Unexpected error handling nonce file '{nonce_file}': {e}")
+                # Generic fallback
+                last_nonce = current_time_nonce
+
+            # Generate potential new nonce based on current time in microseconds
+            # (current_time_nonce was already calculated)
+
+            # Ensure the new nonce is strictly greater than the last one, increment by 2 for extra safety
+            next_nonce = max(current_time_nonce, last_nonce + 2)
+
+            # Write the new nonce back to the file
+            try:
+                with open(nonce_file, 'w') as f:
+                    f.write(str(next_nonce))
+            except Exception as e:
+                logger.error(f"Error writing nonce {next_nonce} to file '{nonce_file}': {e}")
+                # If write fails, we still proceed with the calculated nonce,
+                # but log the error. The next call might recover.
+
+            logger.info(f"Generated nonce: {next_nonce} (file: '{nonce_file}', based on last: {last_nonce}, current_time: {current_time_nonce})")
+            return str(next_nonce) # Return as string for the API
 
     def sign(self, message: bytes) -> str:
         return base64.b64encode(
