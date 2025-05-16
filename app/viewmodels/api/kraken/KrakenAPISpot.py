@@ -87,7 +87,7 @@ class KrakenAPISpot(KrakenAPI):
             }
 
             body = json.dumps(arguments)
-        
+            logger.info(f"Placing order: {json.dumps(arguments, indent=4)}")
             headers = {
                 "Content-Type": "application/json",
                 "API-Key": self._api_key,
