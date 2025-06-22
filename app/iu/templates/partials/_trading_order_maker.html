@@ -1,0 +1,240 @@
+{% macro render_trading_order_maker(trading_mode, exchange_name) %}
+<div class="row g-4" id="trading-order-maker-container-{{ exchange_name }}">
+    <div>
+        <label class="form-label small" for="leverage-{{ exchange_name }}">{{ _('Leverage') }} ({{ exchange_name }})</label>
+        <input disabled type="text" id="leverage-{{ exchange_name }}" class="form-control leverage-{{ exchange_name }}" value="1" placeholder="1x">
+    </div>
+	<!-- Buy Section -->
+	<div class="col-lg-6">
+        <div class="d-flex align-items-center mb-2">
+            <span class="symbol-{{ exchange_name }} me-2"></span>
+            <span class="price-symbol-display-{{ exchange_name }} small text-muted"></span>
+            <div class="spinner-border spinner-border-sm text-primary ms-2 d-none" role="status" id="price-loading-spinner-{{ exchange_name }}">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+		<div class="border rounded p-3">
+			<div class="mb-3">
+				<label class="form-label small" for="buy-amount-{{ exchange_name }}">{{ _('Amount') }} ({{ exchange_name }})</label>
+				<input type="number" class="form-control buy-amount" id="buy-amount-{{ exchange_name }}" placeholder="0.00">
+			</div>
+			<div class="mb-3">
+				<label class="form-label small" for="buy-usd-{{ exchange_name }}">{{ _('USD Equivalent') }}</label>
+				<input direction="text" class="form-control buy-usd" id="buy-usd-{{ exchange_name }}" readonly placeholder="0.00">
+			</div>
+
+			{% if trading_mode == 'futures' %}
+			<div class="mb-3">
+				<label class="form-label small" for="buy-stoploss-{{ exchange_name }}">{{ _('Stop Loss') }}</label>
+				<input direction="number" class="form-control buy-stoploss" id="buy-stoploss-{{ exchange_name }}" placeholder="0.00">
+			</div>
+			<div class="mb-3">
+				<label class="form-label small" for="buy-takeprofit-{{ exchange_name }}">{{ _('Take Profit') }}</label>
+				<input direction="number" class="form-control buy-takeprofit" id="buy-takeprofit-{{ exchange_name }}"  placeholder="0.00">
+			</div>
+			{% endif %}
+
+			<div class="d-grid mt-4">
+				<button direction="button" class="btn btn-success buy-btn-{{ exchange_name }}">{{ _('Buy') }}</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Sell Section -->
+	<div class="col-lg-6">
+        <div class="d-flex align-items-center mb-2">
+            <span class="symbol-{{ exchange_name }} me-2"></span>
+            <span class="price-symbol-display-{{ exchange_name }} small text-muted"></span>
+            <div class="spinner-border spinner-border-sm text-primary ms-2 d-none" role="status" id="price-loading-spinner-{{ exchange_name }}">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+		<div class="border rounded p-3">
+			<div class="mb-3">
+				<label class="form-label small" for="sell-amount-{{ exchange_name }}">{{ _('Amount') }} ({{ exchange_name }})</label>
+				<input type="number" class="form-control sell-amount" id="sell-amount-{{ exchange_name }}" placeholder="0.00">
+			</div>
+			<div class="mb-3">
+				<label class="form-label small" for="sell-usd-{{ exchange_name }}">{{ _('USD Equivalent') }}</label>
+				<input direction="text" class="form-control sell-usd" id="sell-usd-{{ exchange_name }}" readonly placeholder="0.00">
+			</div>
+
+			{% if trading_mode == 'futures' %}
+			<div class="mb-3">
+				<label class="form-label small" for="sell-stoploss-{{ exchange_name }}">{{ _('Stop Loss') }}</label>
+				<input direction="number" class="form-control sell-stoploss" id="sell-stoploss-{{ exchange_name }}" placeholder="0.00">
+			</div>
+			<div class="mb-3">
+				<label class="form-label small" for="sell-takeprofit-{{ exchange_name }}">{{ _('Take Profit') }}</label>
+				<input direction="number" class="form-control sell-takeprofit" id="sell-takeprofit-{{ exchange_name }}" placeholder="0.00">
+			</div>
+			{% endif %}
+
+			<div class="d-grid mt-4">
+				<button direction="button" class="btn btn-danger sell-btn-{{ exchange_name }}">{{ _('Sell') }}</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    async function getSymbolPrice(symbol, exchange) {
+        try {
+            
+            const res = await fetch(`/get_symbol_price?symbol=${symbol}&exchange=${exchange}`)
+            const data = await res.json()
+            return {price: data.price, symbol: data.symbol}
+        } catch (error) {
+            console.error('Error fetching symbol price:', error);
+            return {price: 0, symbol: symbol};
+        }
+      
+    }
+    // Placeholder for actual price fetching. In a real scenario, this would come from an API.
+    // For now, let's assume a dummy price for calculation.
+    const container = document.getElementById('trading-order-maker-container-{{ exchange_name }}');
+    const buyBtn = container.querySelector('.buy-btn-{{ exchange_name }}');
+    const sellBtn = container.querySelector('.sell-btn-{{ exchange_name }}');
+    const priceLoadingSpinner = container.querySelector(`#price-loading-spinner-{{ exchange_name }}`);
+    const priceSymbolDisplay = container.querySelector(`.price-symbol-display-{{ exchange_name }}`);
+    const symbolSpans = container.querySelectorAll(`.symbol-{{ exchange_name }}`);
+
+    let currentPrice = 0;
+    let currentSymbol = '';
+
+    async function fetchAndDisplaySymbolPrice() {
+        priceLoadingSpinner.classList.remove('d-none');
+        try {
+            const res = await getSymbolPrice(localStorage.getItem("symbol-original"), '{{ exchange_name }}');
+            currentPrice = res.price;
+            currentSymbol = res.symbol;
+            priceSymbolDisplay.innerHTML = `${currentPrice.toFixed(2)} ${currentSymbol}`;
+            symbolSpans.forEach(span => span.innerHTML = currentSymbol);
+        } catch (error) {
+            console.error('Error fetching and displaying symbol price:', error);
+            currentPrice = 0;
+            currentSymbol = localStorage.getItem("symbol-original") || 'UNKNOWN';
+            priceSymbolDisplay.innerHTML = `Error fetching price for ${currentSymbol}`;
+            symbolSpans.forEach(span => span.innerHTML = currentSymbol);
+        } finally {
+            priceLoadingSpinner.classList.add('d-none');
+            updateUSDCalculations(); // Recalculate USD after price is fetched
+        }
+    }
+
+    function calculateUSD(amount) {
+        return (amount * currentPrice).toFixed(2);
+    }
+
+    function updateUSDCalculations() {
+        const buyAmountInput = container.querySelector('.buy-amount');
+        const buyUsdInput = container.querySelector('.buy-usd');
+        if (buyAmountInput && buyUsdInput) {
+            const buyAmount = parseFloat(buyAmountInput.value) || 0;
+            buyUsdInput.value = calculateUSD(buyAmount);
+        }
+
+        const sellAmountInput = container.querySelector('.sell-amount');
+        const sellUsdInput = container.querySelector('.sell-usd');
+        if (sellAmountInput && sellUsdInput) {
+            const sellAmount = parseFloat(sellAmountInput.value) || 0;
+            sellUsdInput.value = calculateUSD(sellAmount);
+        }
+    }
+
+    // Attach event listeners to amount inputs
+    const buyAmountInput = container.querySelector('.buy-amount');
+    if (buyAmountInput) {
+        buyAmountInput.addEventListener('input', updateUSDCalculations);
+    }
+
+    const sellAmountInput = container.querySelector('.sell-amount');
+    if (sellAmountInput) {
+        sellAmountInput.addEventListener('input', updateUSDCalculations);
+    }
+
+    // Initial fetch and calculation on load
+    setTimeout(fetchAndDisplaySymbolPrice, 10000);
+
+    const submitOrder = async function(direction) {
+        buyBtn.disabled = true;
+        sellBtn.disabled = true;
+        const symbol = currentSymbol || localStorage.getItem("symbol-original") || 'UNKNOWN'; // Use currentSymbol if available
+
+        const amountInput = container.querySelector(`.${direction}-amount`);
+        const amount = parseFloat(amountInput.value);
+        let stopLoss = 0;
+        let takeProfit = 0;
+
+        if (isNaN(amount) || amount <= 0) {
+            alert(`Please enter a valid amount for ${direction} order. Amount must be greater than ${amount}.`);
+            return;
+        }
+
+        let details = `Submitting ${direction} order for ${amount} ${symbol}`;
+        
+        // Check if trading_mode is 'futures' using a data attribute or a global JS variable set by Jinja
+        // For now, we'll rely on the Jinja variable directly as per the plan.
+        const tradingMode = "{{ trading_mode }}"; 
+        const exchangeName = "{{ exchange_name }}";
+
+        if (tradingMode === 'futures') {
+            const stopLossInput = container.querySelector(`.${direction}-stoploss`);
+            const takeProfitInput = container.querySelector(`.${direction}-takeprofit`);
+            
+            stopLoss = stopLossInput ? parseFloat(stopLossInput.value) : 0;
+            takeProfit = takeProfitInput ? parseFloat(takeProfitInput.value) : 0;
+
+            details += `\nStop Loss: ${stopLoss}`;
+            details += `\nTake Profit: ${takeProfit}`;
+        }
+
+        try {
+
+            const res = await fetch('{{ url_for("routes.add_order") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    trading_mode: exchangeName,
+                    orderType: "market",
+                    order_made_by:"user",
+                    orderDirection: direction,
+                    symbol: symbol,
+                    amount: amount,
+                    stopLoss: stopLoss,
+                    takeProfit: takeProfit,
+                    leverage: Number(container.querySelector(`.leverage-${exchangeName}`).value)
+                })
+            });
+
+            const orderData = await res.json();
+            if (orderData.error) {
+                alert(`Error submitting order: ${orderData.error}`);
+                return;
+            }
+            alert("Order submitted successfully!");
+            console.log({newOrder: orderData});
+
+            // external functions
+            fetchUserTrades().then(renderUserTrades)
+            // todo: update balance
+        } catch (error) {
+            console.error('Error submitting order:', error);
+            return;
+        } finally
+        {
+            buyBtn.disabled = false;
+            sellBtn.disabled = false;
+        }
+        //alert(details);
+    };
+
+    // add listeners
+    buyBtn.addEventListener('click', () => submitOrder('buy'));
+    sellBtn.addEventListener('click', () => submitOrder('sell'));
+});
+</script>
+{% endmacro %}

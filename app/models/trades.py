@@ -8,7 +8,7 @@ class Trade(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = db.Column(db.String(36), db.ForeignKey('users.id'))
     order_id = db.Column(db.String(64))
-    symbol = db.Column(db.String(16))
+    symbol = db.Column(db.String(36))
     order_direction = db.Column(db.String(8))  # 'buy' or 'sell'
     volume = db.Column(db.Float)
     price = db.Column(db.Float)
@@ -18,13 +18,18 @@ class Trade(db.Model):
     order_close_condition = db.Column(db.String(16), default="")
     order_description = db.Column(db.String(255))
     order_type = db.Column(db.String(16))
-    stop_loss = db.Column(db.Float)
-    take_profit = db.Column(db.Float)
+    stop_loss = db.Column(db.Float, default=0.0)
+    take_profit = db.Column(db.Float, default=0.0)
     stop_loss_percent = db.Column(db.Float)
     take_profit_percent = db.Column(db.Float)
     comment = db.Column(db.String(255))
     actual_profit = db.Column(db.Float) # Profit in quote currency
     actual_profit_in_usd = db.Column(db.Float, nullable=True) # Profit in USD
+    exchange = db.Column(db.String(24))
+    trading_mode = db.Column(db.String(24))
+    leverage = db.Column(db.Float, default=1.0) # number
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
     
     # Relationships
     user = db.relationship('User', backref='trades')

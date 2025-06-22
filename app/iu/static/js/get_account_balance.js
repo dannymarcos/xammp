@@ -3,13 +3,14 @@ export default async function get_account_balance(method) {
     let metodo = method;
 
     try {
+        console.log({ metodo });
         // Configurar la solicitud POST
         const response = await fetch("/get_account_balance", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ trading_mode: metodo }),
+            body: JSON.stringify({ trading_mode: metodo, exchange_name: metodo }),
         });
 
         // Verificar si la respuesta es exitosa

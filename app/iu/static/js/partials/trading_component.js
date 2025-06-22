@@ -23,7 +23,7 @@ function renderUserTrades(trades) {
     if (!trades || trades.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="11" class="text-center">${getTranslatedText('No trades found')}</td>
+                <td colspan="11" class="text-center">No trades found</td>
             </tr>
         `;
         return;
@@ -42,9 +42,10 @@ function renderUserTrades(trades) {
             <td class="text-end">${trade.price ? parseFloat(trade.price).toFixed(2) : '0.00'}</td>
             <td class="text-end">${trade.volume ? parseFloat(trade.volume).toFixed(4) : '0.0000'}</td>
             <td>${trade.status || ''}</td>
-            <td class="text-end">${trade.stop_loss ? parseFloat(trade.stop_loss).toFixed(2) : '-'}</td>
-            <td class="text-end">${trade.take_profit ? parseFloat(trade.take_profit).toFixed(2) : '-'}</td>
-            <td>${trade.order_close_condition || ''}</td>
+            <td>${trade.exchange || ''}</td>
+            <td>${trade.stop_loss || ''}</td>
+            <td>${trade.take_profit || ''}</td>
+            <td>${trade.leverage || ''}</td>
             <td title="${trade.comment || ''}">${trade.comment ? trade.comment.substring(0, 15) + (trade.comment.length > 15 ? '...' : '') : ''}</td>
         </tr>
         `;
@@ -109,7 +110,7 @@ function updateAvailableOptionsToSell(balance) {
 
 function updateBuyMarketPrice(symbol) {
     // Find the price display elements - they are spans with class 'input-group-text'
-    const buyPriceDisplay = document.querySelector('#buy-price-currency')
+    const buyPriceDisplay = document.querySelectorAll('.buy-price-currency')
     const sellPriceDisplay = document.querySelector('#sell-price-currency')
     
     if (!buyPriceDisplay || !sellPriceDisplay) {
@@ -118,7 +119,9 @@ function updateBuyMarketPrice(symbol) {
     }
     
     // Update with loading indicator
-    buyPriceDisplay.textContent = "Loading...";
+    buyPriceDisplay.forEach(element => {
+        element.textContent = "Loading...";
+    });
     sellPriceDisplay.textContent = "Loading...";
     
     getSymbolPrice(symbol)
@@ -129,19 +132,28 @@ function updateBuyMarketPrice(symbol) {
                 const currency = symbol
 
                 const priceWithCurrency = `${price} ${currency}`;
-                buyPriceDisplay.textContent = priceWithCurrency;
+                   buyPriceDisplay.forEach(element => {
+                    element.textContent =priceWithCurrency;
+                });
+                // buyPriceDisplay.textContent = priceWithCurrency;
                 sellPriceDisplay.textContent = priceWithCurrency;
               
                 
             } else {
                 console.error("No price received from API");
-                buyPriceDisplay.textContent = "USD";
+                // buyPriceDisplay.textContent = "USD";
+                 buyPriceDisplay.forEach(element => {
+                    element.textContent = "USD";
+                });
                 sellPriceDisplay.textContent = "USD";
             }
         })
         .catch(error => {
             console.error("Error updating market price:", error);
-            buyPriceDisplay.textContent = "USD";
+            //buyPriceDisplay.textContent = "USD";
+             buyPriceDisplay.forEach(element => {
+                    element.textContent = "USD";
+                });
             sellPriceDisplay.textContent = "USD";
         });
 }
@@ -180,7 +192,7 @@ async function fetchAccountBalance() {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ trading_mode: getTradingMode() }) // Use dynamic mode
+                body: JSON.stringify({ trading_mode: getTradingMode(), exchange_name: getTradingMode() }) // Use dynamic mode
             });
 
         if (!response.ok) {
@@ -204,7 +216,10 @@ async function fetchAccountBalance() {
 
 async function getSymbolPrice(symbol) {
     try {
-        console.log(`Fetching price for symbol: ${symbol}`);
+        if (!symbol) {
+            console.warn("Symbol not provided");
+            return;
+        }
         const res = await fetch(`${API_ENDPOINTS.getSymbolPrice}?symbol=${symbol}`);
         
         if (!res.ok) {
@@ -212,7 +227,7 @@ async function getSymbolPrice(symbol) {
         }
         
         const json = await res.json();
-        console.log("Symbol price response:", json);
+        // console.log("Symbol price response:", json);
         
         // Check if the response has the expected structure
         if (json && json.price) {
@@ -410,4 +425,145 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(() => {
         updateBuyMarketPrice(getTradingSymbol());
     }, 30000);
+    // --- FUTURES TRADING LOGIC ---
+
+    // 1. UI Element References
+    const futuresOrderType = document.getElementById('futures-order-type');
+    const futuresLeverage = document.getElementById('futures-leverage');
+    const futuresMarginRequired = document.getElementById('futures-margin-required');
+    const futuresSymbol = document.getElementById('futures-symbol');
+    const futuresEntryPrice = document.getElementById('futures-entry-price');
+    const futuresAmount = document.getElementById('futures-amount');
+    const futuresStopLoss = document.getElementById('futures-stop-loss');
+    const futuresTakeProfit = document.getElementById('futures-take-profit');
+    const futuresOpenLongBtn = document.getElementById('futures-open-long');
+    const futuresOpenShortBtn = document.getElementById('futures-open-short');
+    const futuresCloseLongBtn = document.getElementById('futures-close-long');
+    const futuresCloseShortBtn = document.getElementById('futures-close-short');
+    const futuresInfoAlert = document.getElementById('futures-info-alert');
+
+    // 3. Action Handlers
+    function getFuturesFormData() {
+        return {
+            orderType: futuresOrderType.value,
+            leverage: futuresLeverage?.value || 1,
+            symbol: futuresSymbol.value,
+            // entryPrice: futuresEntryPrice.value,
+            amount: futuresAmount.value,
+            stopLoss: futuresStopLoss.value,
+            takeProfit: futuresTakeProfit.value,
+           // marginRequired: futuresMarginRequired.value
+        };
+    }
+
+    async function handleFuturesOpenLong() {
+        // disable btns
+        futuresOpenLongBtn.disabled = true;
+        futuresOpenShortBtn.disabled = true;
+        const data = getFuturesFormData();
+        
+        const res = await fetch("/add_order", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                ...data,
+                trading_mode: "futures",
+                order_made_by:"user",
+                orderDirection: "buy",
+                symbol: localStorage.getItem("symbol-original"),
+            })
+        })
+        const result = await res.json();
+        futuresOpenLongBtn.disabled = false;
+        futuresOpenShortBtn.disabled = false;
+        if (result.error) {
+            showAlert("Error: " + result.error, "error");
+        } else {
+            showAlert("Order placed successfully", "info");
+            fetchUserTrades().then(renderUserTrades);
+        }
+    }
+
+    async function handleFuturesOpenShort() {
+        futuresOpenLongBtn.disabled = true;
+        futuresOpenShortBtn.disabled = true;
+        const data = getFuturesFormData();
+        
+        const res = await fetch("/add_order", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                ...data,
+                trading_mode: "futures",
+                order_made_by:"user",
+                orderDirection: "sell",
+                symbol: localStorage.getItem("symbol-original"),
+            })
+        })
+        const result = await res.json();
+        futuresOpenLongBtn.disabled = false;
+        futuresOpenShortBtn.disabled = false;
+        if (result.error) {
+            showAlert("Error: " + result.error, "error");
+        } else {
+            showAlert("Order placed successfully", "info");
+            fetchUserTrades().then(renderUserTrades);
+        }
+    }
+
+    async function handleFuturesCloseLong() {
+        futuresCloseLongBtn.disabled = true;
+        futuresCloseShortBtn.disabled = true;
+        const data = getFuturesFormData();
+        const res = await fetch("/close_order", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                ...data,
+                trading_mode: "futures",
+                order_made_by:"user",
+                orderDirection: "sell",
+                symbol: localStorage.getItem("symbol-original"),
+                params: {
+                    
+                }
+            })
+        })
+        const result = await res.json();
+        futuresCloseLongBtn.disabled = false;
+        futuresCloseShortBtn.disabled = false;
+        if (result.error) {
+            showAlert("Error: " + result.error, "error");
+        } else {
+            showAlert("Order placed successfully", "info");
+            fetchUserTrades().then(renderUserTrades);
+        }
+    }
+
+    function handleFuturesCloseShort() {
+        const data = getFuturesFormData();
+        console.log("[FUTURES] Close Short Position", data);
+        showAlert("Simulated: Close Short Position\n" + JSON.stringify(data, null, 2), "info");
+    }
+
+    // 4. Event Listeners
+    if (futuresOpenLongBtn) futuresOpenLongBtn.addEventListener('click', handleFuturesOpenLong);
+    if (futuresOpenShortBtn) futuresOpenShortBtn.addEventListener('click', handleFuturesOpenShort);
+    if (futuresCloseLongBtn) futuresCloseLongBtn.addEventListener('click', handleFuturesCloseLong);
+    if (futuresCloseShortBtn) futuresCloseShortBtn.addEventListener('click', handleFuturesCloseShort);
+
+    // Update margin required dynamically
+    // if (futuresLeverage) futuresLeverage.addEventListener('change', updateFuturesMarginRequired);
+    // if (futuresAmount) futuresAmount.addEventListener('input', updateFuturesMarginRequired);
+    // if (futuresEntryPrice) futuresEntryPrice.addEventListener('input', updateFuturesMarginRequired);
+
+    // Initialize margin required on load
+    // updateFuturesMarginRequired();
+
 });

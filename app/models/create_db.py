@@ -7,3 +7,4 @@ db = SQLAlchemy()
 # Importa todos tus modelos aquí para que Flask-Migrate los detecte
 from .users import User
 from .trades import Trade
+from .strategies import Strategy

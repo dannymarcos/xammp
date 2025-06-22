@@ -1,5 +1,3 @@
- import predict from "./predict.js";
-
 export default async function get_historical_data(symbol) {
     const d = document;
     const $historicTableBody = d.getElementById("historic-table-body");
@@ -51,11 +49,6 @@ export default async function get_historical_data(symbol) {
         const latestData = json[json.length-1];
         // // Creamos un arreglo para enviar al modelo
         const symbolData = latestData[4];
-
-        // console.log("Estamos dentro de la funcion get_historical_data-symbolData", symbolData);
-         await predict(symbolData);
-
-
 
         // console.log("Datos históricos cargados correctamente.");
     } catch (error) {

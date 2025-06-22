@@ -62,6 +62,7 @@
             </div>
             <div class="crypto-section bg-gray-100 p-4 rounded mb-8">
               <h2 class="text-2xl font-bold mb-4">Cryptocurrencies</h2>
+              <button id="change-mode-btn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" style="display:  none;"></button>
               <div class="flex items-center mb-4 flex-wrap flex-col">
                 <!-- Aqui va la barra de busqueda -->
                 <div class="flex items-center mb-4 flex-wrap gap-3">
@@ -129,63 +130,12 @@
       </div>
     </div>
           
-      
-    <div id="prediction-result"></div>
 
-
-        <!-- Trading Mode Controls -->
-        <div class="flex flex-col items-center space-y-4 mb-4">
-          <div class="trading-controls space-y-4">
-            <button id="trading-mode-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-48">Trade in Spot</button>
-            <button id="strategy-mode-button" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded w-48">
-              Using All Strategies
-            </button>
-            <!-- AI Trading button removed - now handled by the trading bot component -->
-          </div>
-        </div>
-        
-        <!-- AI Trading Settings are now handled by the trading bot component -->
-  
-        <div class="chat-section bg-gray-100 p-4 rounded mb-8">
-          <h2 class="text-2xl font-bold mb-4">Chat con IA</h2>
-          <div id="chat-messages" class="bg-white p-4 rounded h-64 overflow-y-auto mb-4"></div>
-          
-          <div class="flex">
-            <input type="text" id="chat-input" class="flex-grow mr-2 p-2 border rounded" placeholder="Escribe tu estrategia...">
-            <button id="send-strategy" class="bg-blue-500 text-white px-4 py-2 rounded">Guardar Estrategia</button>
-          </div>
+      <!-- Include Trading Bot Strategies -->
+        <div >
+          {% include 'partials/_trading_bot_strategies.html' %}
         </div>
 
-        <!-- Trade history is now handled by the trading bot component -->
-  
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div class="ai-trading-section bg-gray-100 p-4 rounded mb-8">
-            <h2 class="text-2xl font-bold mb-4">AI Trading Info</h2>
-            <p><strong style="color: #000000;">Start Price:</strong> <span id="start-price" style="color: #0000FF;">-</span></p>
-            <p><strong style="color: #000000;">End Price:</strong> <span id="end-price" style="color: #0000FF;">-</span></p>
-            <p><strong style="color: #000000;">Strategy:</strong> <span id="strategy" style="color: #0000FF;">-</span></p>
-            <p><strong style="color: #000000;">Profit/Loss:</strong> <span id="profit-loss">-</span></p>
-            <p><strong style="color: #000000;">AI Action:</strong> <span id="ai-action">-</span></p>
-          </div>
-          <div class="market-analysis-section bg-gray-100 p-4 rounded mb-8">
-            <h2 class="text-2xl font-bold mb-4">Market Analysis</h2>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <p><strong style="color: #000000;">Current Price:</strong> <span id="current-price">-</span></p>
-                <p><strong style="color: #000000;">Price Change:</strong> <span id="price-change">-</span></p>
-                <p><strong style="color: #000000;">RSI:</strong> <span id="rsi-value">-</span></p>
-                <p><strong style="color: #000000;">MACD:</strong> <span id="macd-value">-</span></p>
-              </div>
-              <div>
-                <p><strong style="color: #000000;">Stochastic:</strong> <span id="stochastic-value">-</span></p>
-                <p><strong style="color: #000000;">Stop Loss:</strong> <span id="stop-loss-value">-</span></p>
-                <p><strong style="color: #000000;">Take Profit:</strong> <span id="take-profit-value">-</span></p>
-                <p><strong style="color: #000000;">Patterns:</strong> <span id="patterns-value">-</span></p>
-                <p><strong style="color: #000000;">Signals:</strong> <span id="signals-value">-</span></p>
-              </div>
-            </div>
-          </div>
-        </div>
         <div class="placeholder-area bg-gray-100 p-4 rounded">
           <h2 class="text-2xl font-bold mb-2">Future Features</h2>
           <ul class="list-disc list-inside">
@@ -197,7 +147,7 @@
       
       <!-- <script type="text/javascript" src="/static/js/chart.js" defer></script> -->
       <script src="/static/index_dom.js" type="module"></script>
-      <script src="/static/js/ai_trading.js"></script>
+   
       <!-- The trading_bot.js script is now loaded by the _trading_bot.html partial -->
     </div>
 
@@ -273,6 +223,39 @@ async function placeOrder(orderDirection) {
 </script>
     
 <script>
+  // change change mode button text depend on current method mode (futures or spot)
+
+  function renderChangeModeBtn() {
+    const changeModeBtn = document.getElementById('change-mode-btn')
+    const currentMode = localStorage.getItem('method')
+    if (currentMode === 'futures') {
+      changeModeBtn.textContent = 'Change to Spot'
+    } else {
+      changeModeBtn.textContent = 'Change to Futures'
+    }
+
+    // update crypto list
+    updateCryptoList()
+  }
+
+  const changeModeBtn = document.getElementById('change-mode-btn')
+  changeModeBtn.addEventListener('click', () => {
+    const currentMode = localStorage.getItem('method')
+    if (currentMode === 'futures') {
+      localStorage.setItem('method', 'spot')
+      renderChangeModeBtn()
+    } else {
+      localStorage.setItem('method', 'futures')
+      renderChangeModeBtn()
+      const symbol = localStorage.getItem('symbol')
+      if (symbol) {
+        changeTradingViewSymbol(symbol)
+    }
+    }  
+  }
+  )
+  renderChangeModeBtn()
+
   const fetchCryptosBtn = document.getElementById('fetchCryptos')
   const input = document.getElementById('crypto-search')
   
@@ -298,7 +281,8 @@ async function placeOrder(orderDirection) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          trading_mode: "futures"
+          trading_mode: localStorage.getItem("method"),
+          exchange_name: localStorage.getItem("method"),
         }),
       })
 
@@ -310,7 +294,6 @@ async function placeOrder(orderDirection) {
       const cryptoList = document.getElementById('crypto-list')
       const cryptos = await getCryptos()
 
-      console.log({cryptos})
       if (!cryptos) alert("Error getting cryptos")
       
       cryptos.forEach(crypto => {
@@ -318,6 +301,8 @@ async function placeOrder(orderDirection) {
         li.classList.add('flex', 'justify-between', 'mb-2')
         const span = document.createElement('span')
         const spanPrice = document.createElement('span')
+        const spanExchangeType = document.createElement('span')
+
         span.textContent = crypto.symbol
         spanPrice.textContent = crypto.price
 

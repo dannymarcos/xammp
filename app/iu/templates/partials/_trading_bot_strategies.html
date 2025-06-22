@@ -1,0 +1,143 @@
+<!-- Trading Bot Strategies Component -->
+<div class="card shadow-sm mb-4" id="strategy-bot">
+  <div class="card-body">
+    <h3 class="card-title mb-4">Trading Bot Strategies</h3>
+    <!-- Strategy Management -->
+    <div class="mb-4">
+      <h4 class="h5 mb-3">Manage Strategies</h4>
+      <div class="row g-3 align-items-end">
+        <div class="col-md-4">
+          <label for="strategy-name" class="form-label">Strategy Name</label>
+          <input type="text" class="form-control" id="strategy-name" placeholder="Enter strategy name">
+        </div>
+        <div class="col-md-8">
+          <label for="strategy-description" class="form-label">Strategy Description (AI instructions)</label>
+          <textarea class="form-control" id="strategy-description" rows="2" placeholder="Describe your strategy for the AI bot..."></textarea>
+        </div>
+        <div class="col-md-12 mt-2">
+          <button id="save-strategy" class="btn btn-primary me-2">
+            <i class="bi bi-save"></i> Save Strategy
+          </button>
+          <button id="delete-strategy" class="btn btn-danger me-2" disabled>
+            <i class="bi bi-trash"></i> Delete Selected
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Select Strategy -->
+    <div class="mb-4">
+      <label for="strategy-list-strategy-bot" class="form-label">Select Saved Strategy</label>
+      <select id="strategy-list-strategy-bot" class="form-select strategy-list">
+        <option value="" disabled selected>No strategies saved</option>
+      </select>
+    </div>
+    <!-- Bot Configuration (reuse trading bot style) -->
+    <div class="mb-4">
+      <h4 class="h5 mb-3">Bot Configuration</h4>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <div class="form-floating">
+            <select class="form-select bot-config-input" id="bot-trading-mode" name="trading_mode">
+              <option value="spot" selected>Spot</option>
+              <option value="futures">Futures</option>
+            </select>
+            <label for="bot-trading-mode">Trading Mode</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-floating">
+            <select class="form-select bot-config-input" id="bot-exchange" name="exchange">
+              <option value="bingx">Bingx</option>
+              <option value="kraken" selected>Kraken</option>
+            </select>
+            <label for="bot-exchange">Exchange</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-floating">
+            <select class="form-select bot-config-input" id="bot-symbol" name="symbol">
+              <option value="BTC/USD" selected>BTC/USD</option>
+            </select>
+            <label for="bot-symbol">Trading Pair</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-floating">
+            <select class="form-select bot-config-input" id="bot-timeframe" name="timeframe">
+              <option value="1m" selected>1m</option>
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
+              <option value="30m">30m</option>
+              <option value="1h">1h</option>
+              <option value="4h">4h</option>
+              <option value="1d">1d</option>
+            </select>
+            <label for="bot-timeframe">Timeframe</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="number" class="form-control bot-config-input" id="bot-amount" name="amount" value="0.0001" step="0.0001" min="0.0001">
+            <label for="bot-amount">Trade Amount</label>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="form-floating">
+            <input type="number" class="form-control bot-config-input" id="bot-max-active-trades" name="max_active_trades" value="20" min="1">
+            <label for="bot-max-active-trades">Max Active Trades</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Bot Controls -->
+    <div class="d-flex align-items-center mb-4">
+      <button id="run-bot" class="btn btn-success me-3 toggle-bot">
+        <i class="bi bi-play-fill"></i> Run Bot
+      </button>
+      <div class="d-flex align-items-center">
+        <span class="me-2">Status:</span>
+        <span id="bot-status" class="badge bg-secondary bot-status">Stopped</span>
+        <span class="ms-3">Last Error:</span>
+        <span id="last-error-message" class="badge bg-warning text-dark"></span>
+      </div>
+    </div>
+    <!-- Trade History -->
+    <div class="mt-4">
+      <h4 class="h5 mb-3">Trade History</h4>
+      <div class="table-responsive" style="max-height: 300px; overflow-y: scroll;">
+        <table class="table table-hover">
+          <thead class="table-light">
+            <tr>
+              <th>Date</th>
+              <th>Order Type</th>
+              <th>Direction</th>
+              <th>Symbol</th>
+              <th class="text-end">Price</th>
+              <th class="text-end">Volume</th>
+              <th>Status</th>
+              <th class="text-end">Take Profit</th>
+              <th class="text-end">Actual Profit USD</th>
+              <th>Trading mode</th>
+              <th>Exchange</th>
+              <th>Comment</th>
+            </tr>
+          </thead>
+          <tbody id="strategy-trade-history-body" class="trade-history-body">
+            <tr>
+              <td colspan="12" class="text-center">No trades found</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add component-specific JavaScript -->
+<script type="module">
+    import { TradingBot } from "{{ url_for('static', filename='js/TradingBot.js') }}";
+    document.addEventListener("DOMContentLoaded", () => {
+        new TradingBot('strategy-bot').init();
+    });
+</script>
+<script src="{{ url_for('static', filename='js/partials/trading_strategies.js') }}"></script>

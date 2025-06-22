@@ -35,12 +35,10 @@ export default async function get_cryptos(method,boton,cryptoList,cryptoSearch) 
                         headers:{
                             'Content-Type':'application/json'
                         },
-                        body: JSON.stringify({trading_mode: metodo})
+                        body: JSON.stringify({trading_mode: metodo, exchange_name: metodo})
                     });
                     let json = await response.json();
-                    console.log({cryptoList:json})
 
-                    // console.log(`Respuesta desde /get_cryptos en routes.py:`, json);
 
                     // Verificar si hay errores en la respuesta
                     if (json.error && json.error.length > 0) {
@@ -54,7 +52,8 @@ export default async function get_cryptos(method,boton,cryptoList,cryptoSearch) 
 
                      cryptos.forEach(crypto=>{
                         if (crypto.symbol.toLowerCase().includes(searchTerm)) {
-
+                           
+                            
                             // Aqui se debe eliminar el caracter ":" de crypto.symbol
                             let crypto_symbol_mod = crypto.symbol.replace(/:/g, '');
                             // console.log("Simbolo", crypto_symbol_mod);

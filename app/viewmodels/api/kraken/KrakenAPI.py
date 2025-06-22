@@ -83,6 +83,7 @@ class KrakenAPI:
                     if 'working outside of application context' in str(e).lower():
                         raise RuntimeError("Flask application context not available")
                     raise
+            print(f"✅Order added to database")
         except Exception as e:
             traceback.print_exc()
             return {"error": str(e)}, 400
@@ -96,7 +97,7 @@ class KrakenAPI:
     def get_trades_history(self):
         raise NotImplementedError("Method not implemented")
 
-    def add_order(self, order_type, order_direction, volume, symbol, price):
+    def add_order(self, order_type, order_direction, volume, symbol, price=None):
         raise NotImplementedError("Method not implemented")
 
     def get_symbol_price(self, symbol):

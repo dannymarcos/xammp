@@ -1,0 +1,138 @@
+{% macro render_account_balance(exchange_name, component_id_suffix) %}
+{% set base_id = component_id_suffix | default(exchange_name | lower | replace(' ', '-') ~ "_balance_widget") %}
+<div class="card account-balance-component mb-3" id="account-balance-container-{{ base_id }}">
+    <div class="card-header bg-light">
+        <h5 class="card-title mb-0">
+            Account Balance
+            <small class="text-muted">({{ exchange_name | title }})</small>
+        </h5>
+    </div>
+    <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>Symbol:</span>
+                <strong id="balance-symbol-{{ base_id }}">N/A</strong>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>Balance:</span>
+                <strong id="balance-amount-{{ base_id }}" class="text-success">N/A</strong>
+            </li>
+        </ul>
+        <button class="btn btn-sm btn-outline-primary mt-2" id="refresh-balance-btn-{{ base_id }}">Refresh</button>
+    </div>
+    <div class="card-footer text-muted small">
+        Last updated: <span id="balance-last-updated-{{ base_id }}">Never</span>
+    </div>
+</div>
+
+<script>
+(function() {
+    const exchangeNameA = "{{ exchange_name }}";
+    const baseId = "{{ base_id }}";
+    // The `ul` element will now hold multiple balances.
+    const balancesListElement = document.getElementById(`balance-amount-${baseId}`); // Re-purposing this ID for the list container
+    const symbolDisplayElement = document.getElementById(`balance-symbol-${baseId}`); // This will be cleared or hidden
+    const lastUpdatedElement = document.getElementById(`balance-last-updated-${baseId}`);
+    const refreshButton = document.getElementById(`refresh-balance-btn-${baseId}`);
+
+    // Adjusting the HTML structure slightly if the `balance-amount-${baseId}` was not a UL initially.
+    // For this refactor, we assume the <li> with id `balance-amount-${baseId}`'s PARENT `ul` is the target for list items.
+    // Let's get the parent `ul` of the original balance amount strong tag.
+    const listContainer = document.getElementById(`balance-amount-${baseId}`).closest('ul');
+
+
+    async function fetchAndUpdateAllBalances() {
+        if (!listContainer || !lastUpdatedElement) {
+            console.error(`Balance component elements not found for ID: ${baseId}`);
+            return;
+        }
+        
+        // Clear previous balances and show loading state
+        listContainer.innerHTML = `
+            <li class="list-group-item d-flex justify-content-center align-items-center">
+                <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 
+                <span class="ms-2">Loading balances...</span>
+            </li>`;
+        
+        // Hide or clear the single "Symbol:" display as it's no longer relevant for multiple balances
+        if (symbolDisplayElement && symbolDisplayElement.parentElement.tagName === 'LI') {
+            symbolDisplayElement.parentElement.style.display = 'none'; // Hide the "Symbol: N/A" row
+        }
+
+
+        try {
+            const response = await fetch('/get_account_balance', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    trading_mode: exchangeNameA,
+                    exchange_name: exchangeNameA
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch((error) => ({ detail: error }));
+                alert(errorData.detail || `API Error: ${response.status}`);
+            }
+
+            const data = await response.json();
+            
+            listContainer.innerHTML = ''; // Clear loading indicator
+
+            if (data && data.balance && Array.isArray(data.balance) && data.balance.length > 0) {
+                data.balance.forEach(balanceInfo => {
+                    if (balanceInfo && typeof balanceInfo.amount !== 'undefined' && typeof balanceInfo.currency !== 'undefined') {
+                        const amount = parseFloat(balanceInfo.amount);
+                        const currency = balanceInfo.currency.toUpperCase();
+                        
+                        const listItem = document.createElement('li');
+                        listItem.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center');
+                        
+                        const currencySpan = document.createElement('span');
+                        currencySpan.textContent = `${currency}:`;
+                        
+                        const amountStrong = document.createElement('strong');
+                        amountStrong.classList.add('text-success'); // Or other class based on value
+                        amountStrong.textContent = `${amount.toFixed(8)}`; // Display amount
+                        
+                        listItem.appendChild(currencySpan);
+                        listItem.appendChild(amountStrong);
+                        listContainer.appendChild(listItem);
+                    }
+                });
+                if (data.balance.length === 0) {
+                     listContainer.innerHTML = '<li class="list-group-item text-muted">No balances found.</li>';
+                }
+            } else {
+                listContainer.innerHTML = '<li class="list-group-item text-danger">N/A (No balance data received)</li>';
+            }
+            lastUpdatedElement.textContent = new Date().toLocaleTimeString();
+
+        } catch (error) {
+            console.error(`Error fetching balances for ${exchangeNameA}:`, error);
+            listContainer.innerHTML = '<li class="list-group-item text-danger">Error loading balances.</li>';
+            lastUpdatedElement.textContent = new Date().toLocaleTimeString();
+        }
+    }
+
+    if (refreshButton) {
+        refreshButton.addEventListener('click', fetchAndUpdateAllBalances);
+    }
+    
+    // The 'symbolUpdated' event listener is no longer relevant here as this component
+    // shows all balances for an exchange, not tied to a single selected symbol.
+    // We can remove it or adapt if there's another relevant global event.
+    // For now, removing the 'symbolUpdated' listener specific logic.
+    // document.removeEventListener('symbolUpdated', ...); // If it was added previously and needs removal.
+
+    // Expose a global refresh function for this specific component instance if needed:
+    window[`refreshExchangeBalances_${baseId}`] = fetchAndUpdateAllBalances;
+
+    // Initial fetch
+    fetchAndUpdateAllBalances();
+
+})();
+</script>
+{% endmacro %}

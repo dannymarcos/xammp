@@ -9,7 +9,7 @@ import get_method from "./js/get_method.js";
 import get_symbol from "./js/get_symbol.js";
 import send_strategy from "./js/send_strategy.js";
 import get_historical_data from "./js/get_historical_data.js";
-import add_order from "./js/add_order.js";
+// import add_order from "./js/add_order.js";
 import get_account_balance from "./js/get_account_balance.js";
 
 const d = document;
@@ -84,7 +84,7 @@ d.addEventListener("DOMContentLoaded", async (e)=>{
 
     get_historical_data(symbol);
 
-    add_order('add-order','order-type','type','amount',symbol)
+    // add_order('add-order','order-type','type','amount',symbol)
 
     get_account_balance(method);
 

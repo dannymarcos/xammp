@@ -6,11 +6,12 @@ from flask import Flask
 from flask_cors import CORS
 from flask_login import LoginManager  # Import LoginManager
 from flask_sqlalchemy import SQLAlchemy
-from flask_babel import Babel, _  # Import Babel and _ function for translations
+from flask_babel import Babel, _
+import sqlalchemy  # Import Babel and _ function for translations
 
 from app.models.create_db import db
 from app.models.users import User  # Import the User model
-
+import os
 
 class Application:
    
@@ -43,8 +44,62 @@ class Application:
         self.init_db()
 
     def init_db(self):
-        with self.app.app_context():
-           db.create_all()
+        """Inicializa la base de datos con manejo de errores mejorado"""
+        try:
+            with self.app.app_context():
+                # Crear directorio solo si es SQLite y la ruta es persistente
+                if db.engine.url.drivername == 'sqlite':
+                    db_path = db.engine.url.database
+                    
+                    # Verificar si es una ruta de archivo (no :memory:)
+                    if db_path and db_path != ':memory:':
+                        # Convertir ruta a absoluta y normalizar
+                        db_path = os.path.abspath(db_path)
+                        db_dir = os.path.dirname(db_path)
+                        
+                        # Crear directorio solo si no existe
+                        if db_dir and not os.path.exists(db_dir):
+                            os.makedirs(db_dir, exist_ok=True)
+                            self.app.logger.info(f"✅ Directorio creado: {db_dir}")
+                        
+                        # Actualizar ruta en configuración
+                        self.app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
+                self.app.logger.info("🔍 Conectando a la base de datos...")
+                
+                # Verificar conexión
+                with db.engine.connect() as conn:
+                    self.app.logger.info("✅ Conexión a SQLite exitosa")
+                    
+                    # Crear tablas
+                    self.app.logger.info("🛠 Creando estructura de la base de datos...")
+                    db.create_all()
+                    
+                    # Verificar tablas creadas
+                    inspector = db.inspect(db.engine)
+                    existing_tables = inspector.get_table_names()
+                    expected_tables = [cls.__tablename__ for cls in db.Model.__subclasses__()]
+                    missing_tables = [t for t in expected_tables if t not in existing_tables]
+                    
+                    if missing_tables:
+                        error_msg = f"❌ Tablas faltantes: {', '.join(missing_tables)}"
+                        self.app.logger.error(error_msg)
+                        raise RuntimeError(error_msg)
+                    
+                    self.app.logger.info(f"✅ Base de datos inicializada. Tablas: {', '.join(existing_tables)}")
+        
+        except sqlalchemy.exc.OperationalError as oe:
+            error_msg = f"🚨 Error de conexión: {str(oe)}"
+            self.app.logger.critical(error_msg)
+            # Diagnóstico crítico
+            self.app.logger.critical(f"Ruta de BD: {self.app.config['SQLALCHEMY_DATABASE_URI']}")
+            self.app.logger.critical(f"Ruta absoluta: {os.path.abspath(db.engine.url.database)}")
+            raise RuntimeError(error_msg) from oe
+            
+        except Exception as e:
+            error_msg = f"🚨 Error crítico: {str(e)}"
+            self.app.logger.exception(error_msg)
+            raise RuntimeError(error_msg) from e
 
     def register_blueprint(self, blueprint):
         self.app.register_blueprint(blueprint)

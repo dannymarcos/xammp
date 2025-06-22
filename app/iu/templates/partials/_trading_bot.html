@@ -1,18 +1,18 @@
 <!-- Trading Bot Component -->
-<div class="card shadow-sm mb-4">
+<div class="card shadow-sm mb-4" id="basic-bot">
     <div class="card-body">
         <h3 class="card-title mb-4">{{ _('Trading Bot') }}</h3>
         
         <!-- Bot Controls -->
         <div class="d-flex align-items-center mb-4">
-            <button id="toggle-bot" class="btn btn-success me-3">
+            <button class="toggle-bot btn btn-success me-3">
                 <i class="bi bi-play-fill"></i> {{ _('Start Bot') }}
             </button>
             <div class="d-flex align-items-center">
                 <span class="me-2">{{ _('Status') }}:</span>
-                <span id="bot-status" class="badge bg-secondary">{{ _('Stopped') }}</span>
+                <span class="bot-status badge bg-secondary">{{ _('Stopped') }}</span>
                 <span class="ml-2">{{ _('Last Error') }}:</span>
-                <span id="last_error_message" class="badge bg-warning"></span>
+                <span class="last-error-message badge bg-warning"></span>
             </div>
         </div>
         
@@ -27,35 +27,35 @@
                 </div>
                 <div class="col-md-4">
                     <div class="form-floating">
-                        <input type="number" class="form-control" id="bot-max-active-trades" value="20" min="1" >
-                        <label for="bot-max-active-trades">{{ _('Max Active Trades') }}</label>
+                        <input type="number" class="form-control bot-config-input" name="max-active-trades" value="20" min="1" >
+                        <label>{{ _('Max Active Trades') }}</label>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="form-floating">
-                        <input type="number" class="form-control" id="bot-stop-loss-pct" value="0.02" step="0.01" min="0.01" max="0.5" disabled>
-                        <label for="bot-stop-loss-pct">{{ _('Stop Loss (%)') }}</label>
+                        <input type="number" class="form-control bot-config-input" name="stop-loss-pct" value="0.02" step="0.01" min="0.01" max="0.5" disabled>
+                        <label>{{ _('Stop Loss (%)') }}</label>
                         <span>{{ _('(Temporally Disabled)') }}</span>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="form-floating">
-                        <input type="number" class="form-control" id="bot-take-profit-pct" value="0.04" step="0.01" min="0.01" max="1" disabled>
-                        <label for="bot-take-profit-pct">{{ _('Take Profit (%)') }}</label>
+                        <input type="number" class="form-control bot-config-input" name="take-profit-pct" value="0.04" step="0.01" min="0.01" max="1" disabled>
+                        <label>{{ _('Take Profit (%)') }}</label>
                         <span>{{ _('(Temporally Disabled)') }}</span>
                     </div>
                 </div>
                  <div class="col-md-6">
                     <div class="form-floating">
-                        <select class="form-select" id="bot-symbol">
+                        <select class="form-select bot-config-input" name="symbol">
                             <option value="BTC/USD" selected>BTC/USD</option>
                         </select>
-                        <label for="bot-symbol">{{ _('Trading Pair') }}</label>
+                        <label>{{ _('Trading Pair') }}</label>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="form-floating">
-                        <select class="form-select" id="bot-timeframe">
+                        <select class="form-select bot-config-input" name="timeframe">
                             <option value="1m" selected>1m</option>
                             <option value="5m">5m</option>
                             <option value="15m">15m</option>
@@ -64,32 +64,40 @@
                             <option value="4h">4h</option>
                             <option value="1d">1d</option>
                         </select>
-                        <label for="bot-timeframe">{{ _('Timeframe') }}</label>
+                        <label>{{ _('Timeframe') }}</label>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="form-floating">
-                        <input type="number" class="form-control" id="bot-amount" value="0.00001" step="0.001" min="0.0001">
-                        <label for="bot-amount">{{ _('Trade Amount') }}</label>
+                        <input type="number" class="form-control bot-config-input" name="amount" value="0.00001" step="0.001" min="0.0001">
+                        <label>{{ _('Trade Amount') }}</label>
                     </div>
                 </div>
                 <div class="col-md-6">
                     <div class="form-floating">
-                        <select class="form-select" id="bot-trading-mode">
+                        <select class="form-select bot-config-input" name="trading-mode">
                             <option value="spot" selected>{{ _('Spot') }}</option>
-                           <!--  <option value="futures">{{ _('Futures') }}</option> -->
+                            <option value="futures">{{ _('Futures') }}</option> 
                         </select>
-                        <label for="bot-trading-mode">{{ _('Trading Mode') }}</label>
+                        <label>{{ _('Trading Mode') }}</label>
                     </div>
                 </div>
+                <div class="col-md-6">
+                    <div class="form-floating">
+                        <select class="form-select bot-config-input" name="exchange">
+                            <option value="bingx" >{{ _('Bingx') }}</option>
+                            <option value="kraken" selected>{{ _('kraken') }}</option>
+                        </select>
+                        <label>{{ _('Selecciona un exchange') }}</label>
+                    </div>
             </div>
         </div>
         
         <!-- Trade History -->
         <div class="mt-4">
             <h4 class="h5 mb-3">{{ _('Trade History') }}</h4>
-            <div class="table-responsive">
-                <table class="table table-striped table-hover">
+            <div class="table-responsive" style="max-height: 500px; overflow-y: scroll;">
+                <table class="table table-hover" >
                     <thead class="table-light">
                         <tr>
                             <th>{{ _('Order Type') }}</th>
@@ -99,15 +107,14 @@
                             <th class="text-end">{{ _('Price') }}</th>
                             <th class="text-end">{{ _('Volume') }}</th>
                             <th>{{ _('Status') }}</th>
-                            <th class="text-end">{{ _('Stop Loss') }}</th>
                             <th class="text-end">{{ _('Take Profit') }}</th>
-                            <th class="text-end">{{ _('Actual Profit') }}</th>
                             <th class="text-end">{{ _('Actual Profit USD') }}</th>
-                            <th>{{ _('Close Condition') }}</th>
+                            <th>{{ _('Trading mode') }}</th>
+                            <th>{{ _('Exchange') }}</th>
                             <th>{{ _('Comment') }}</th>
                         </tr>
                     </thead>
-                    <tbody id="trade-history-body">
+                    <tbody class="trade-history-body">
                         <!-- Trade history will be populated here -->
                         <tr>
                             <td colspan="8" class="text-center">{{ _('No trades found') }}</td>
@@ -120,4 +127,9 @@
 </div>
 
 <!-- Add component-specific JavaScript -->
-<script src="{{ url_for('static', filename='js/partials/trading_bot.js') }}"></script>
+<script type="module">
+    import { TradingBot } from "{{ url_for('static', filename='js/TradingBot.js') }}";
+    document.addEventListener("DOMContentLoaded", () => {
+        new TradingBot('basic-bot').init();
+    });
+</script>

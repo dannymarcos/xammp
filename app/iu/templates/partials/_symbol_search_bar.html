@@ -1,0 +1,88 @@
+{% macro render_symbol_bar(exchange_name, component_id_suffix) %}
+<div class="symbol-search-bar-container w-100" id="symbol-search-container-{{ component_id_suffix }}">
+    <span class="symbol-selected-{{ component_id_suffix }}"></span>
+    <input type="text" id="symbol-search-input-{{ component_id_suffix }}" class="form-control mb-2 symbol-search-input" placeholder="Search symbols...">
+    <ul id="symbol-list-{{ component_id_suffix }}" class="list-group symbol-list" style="max-height: 200px; overflow-y: auto;"></ul>
+</div>
+
+<script>
+    (function() {
+        const exchange = "{{ exchange_name }}";
+        const searchInput = document.getElementById('symbol-search-input-{{ component_id_suffix }}');
+        const symbolList = document.getElementById('symbol-list-{{ component_id_suffix }}');
+        let allSymbols = [];
+
+        async function fetchSymbols(exchangeName) {
+            // Placeholder for API fetch logic
+            console.log(`Fetching symbols for exchange: ${exchangeName} (component: {{ component_id_suffix }})`);
+            let response = await fetch('/get_cryptos',{
+                        method:'POST',
+                        headers:{
+                            'Content-Type':'application/json'
+                        },
+                        body: JSON.stringify({trading_mode: exchangeName, exchange_name: exchangeName})
+                    });
+
+            let data = await response.json();
+     
+            if (!data.cryptos) {
+                throw new Error(data.error);
+            }
+            return data.cryptos;
+ }
+
+        function renderSymbols(symbolsToRender) {
+            symbolList.innerHTML = ''; // Clear existing symbols
+            if (symbolsToRender.length === 0) {
+                symbolList.innerHTML = '<li>No matching symbols found.</li>';
+                return;
+            }
+            symbolsToRender.forEach(symbolObj => {
+                const listItem = document.createElement('li');
+                listItem.classList.add('list-group-item', 'list-group-item-action', 'symbol-list-item'); // Bootstrap classes
+                listItem.textContent = `${symbolObj.symbol} (${symbolObj.price || 'N/A'})`; // Display symbol and price
+                listItem.style.cursor = 'pointer';
+                listItem.addEventListener('click', () => {
+                    // Pass the whole object or specific parts as needed
+                    if (window.setSelectedSymbol) {
+                        window.setSelectedSymbol(symbolObj, exchange, '{{ component_id_suffix }}');
+                    } else {
+                        // console.error('setSelectedSymbol function not found.');
+                        localStorage.setItem('symbol-original', symbolObj.symbol);
+                        const symbolElements = document.getElementsByClassName('symbol-selected-{{ component_id_suffix }}')
+                        for (let i = 0; i < symbolElements.length; i++) {
+                            symbolElements[i].textContent = symbolObj.symbol;
+                        }
+                    }
+                });
+                symbolList.appendChild(listItem);
+            });
+        }
+
+        searchInput.addEventListener('input', (event) => {
+            const searchTerm = event.target.value.toLowerCase();
+            const filteredSymbols = allSymbols.filter(symbolObj => 
+                symbolObj.symbol.toLowerCase().includes(searchTerm)
+            );
+            renderSymbols(filteredSymbols);
+        });
+
+        // Initial fetch and render
+        fetchSymbols(exchange).then(symbols => {
+            allSymbols = symbols;
+            renderSymbols(allSymbols);
+        }).catch(error => {
+            console.error("Error fetching symbols:", error);
+            symbolList.innerHTML = '<li>Error loading symbols.</li>';
+        });
+
+        // Expose a function to re-fetch/re-initialize if needed, e.g. if exchange changes dynamically
+        // This might be more complex depending on how you re-render Jinja partials
+        const container = document.getElementById('symbol-search-container-{{ component_id_suffix }}');
+        if (container) {
+            container.dataset.exchangeName = exchange;
+        }
+
+    })();
+</script>
+{% endmacro %}

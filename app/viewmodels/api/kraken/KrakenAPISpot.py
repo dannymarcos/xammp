@@ -87,7 +87,7 @@ class KrakenAPISpot(KrakenAPI):
             }
 
             body = json.dumps(arguments)
-            logger.info(f"Placing order: {json.dumps(arguments, indent=4)}")
+            logger.info(f"🤑 Placing order: {json.dumps(arguments, indent=4)}")
             headers = {
                 "Content-Type": "application/json",
                 "API-Key": self._api_key,
@@ -114,7 +114,8 @@ class KrakenAPISpot(KrakenAPI):
               "order_id": result.get("txid")[0],
               "user_id": self.user_id,
               "stop_loss": stop_loss,
-              "take_profit": take_profit
+              "take_profit": take_profit,
+              "exchange": "kraken",
             }
 
             order_saved = self.add_order_to_db(order_to_save)
@@ -154,3 +155,5 @@ class KrakenAPISpot(KrakenAPI):
       except Exception as e:
         logger.error(f"Error getting trades history: {e}")
         return {"error": str(e)}, 500
+      
+ 

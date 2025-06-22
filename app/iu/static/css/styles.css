@@ -80,7 +80,7 @@ body {
 }
 
 .content-body {
-
+  padding: 2rem;
   display: flex; /* Activa flexbox */
   flex-direction: column; /* Coloca elementos en columna */
   align-items: stretch; /* Centra elementos horizontalmente */

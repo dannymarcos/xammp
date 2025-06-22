@@ -1,4 +1,6 @@
-
+{% import 'partials/_symbol_search_bar.html' as symbol_search_bar %}
+{% import 'partials/_account_balance.html' as acc_balance %}
+{% import 'partials/_trading_order_maker.html' as trading_order_maker %}
    
 <!-- Trading Controls Component -->
 <div class="card shadow-sm mb-4">
@@ -9,31 +11,26 @@
                 <button class="nav-link active" id="spot-tab" data-bs-toggle="tab" data-bs-target="#spot-tab-pane" type="button" role="tab" aria-controls="spot-tab-pane" aria-selected="true">{{ _('Spot') }}</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="cross-tab" data-bs-toggle="tab" data-bs-target="#cross-tab-pane" type="button" role="tab" aria-controls="cross-tab-pane" aria-selected="false">{{ _('Cross') }}</button>
+                <button class="nav-link" id="futures-tab" data-bs-toggle="tab" data-bs-target="#futures-tab-pane" type="button" role="tab" aria-controls="futures-tab-pane" aria-selected="false">{{ _('Futures') }}</button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="isolated-tab" data-bs-toggle="tab" data-bs-target="#isolated-tab-pane" type="button" role="tab" aria-controls="isolated-tab-pane" aria-selected="false">{{ _('Isolated') }}</button>
+           <li class="nav-item" role="presentation">
+                <button class="nav-link" id="bingx-spot-tab" data-bs-toggle="tab" data-bs-target="#bingx-spot-tab-pane" type="button" role="tab" aria-controls="bingx-spot-tab-pane" aria-selected="false">{{ _('Bingx Spot') }}</button>
             </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="grid-tab" data-bs-toggle="tab" data-bs-target="#grid-tab-pane" type="button" role="tab" aria-controls="grid-tab-pane" aria-selected="false">{{ _('Grid') }}</button>
+             <li class="nav-item" role="presentation">
+                <button class="nav-link" id="bingx-futures-tab" data-bs-toggle="tab" data-bs-target="#bingx-futures-tab-pane" type="button" role="tab" aria-controls="bingx-futures-tab-pane" aria-selected="false">{{ _('Bingx Futures') }}</button>
             </li>
         </ul>
         <div class="tab-content" id="tradeTypeTabContent">
+            <!-- Spot Tab -->
             <div class="tab-pane fade show active" id="spot-tab-pane" role="tabpanel" aria-labelledby="spot-tab" tabindex="0">
 
-                <!-- Sub Tabs (Limit, Market, etc.) & Other Options -->
+                <!-- Sub Tabs (Futures, Market, etc.) & Other Options -->
                 <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
-                    <ul class="nav nav-pills nav-pills-sm mb-2 mb-md-0"> <!-- Using nav-pills for the button-like look -->
+                    <!-- <ul class="nav nav-pills nav-pills-sm mb-2 mb-md-0"> 
                         <li class="nav-item me-1">
                             <a class="nav-link active small py-1 px-2" href="#">{{ _('Market') }}</a>
                         </li>
-                        <li class="nav-item me-1">
-                            <a class="nav-link small py-1 px-2" href="#">{{ _('Limit') }}</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link small py-1 px-2" href="#">{{ _('Stop Limit') }}</a>
-                        </li>
-                    </ul>
+                    </ul> -->
                     <div class="d-flex align-items-center gap-3 text-muted small">
                         <span>% {{ _('Fee Level') }}</span>
                         <span><i class="bi bi-gear"></i> {{ _('Auto-Invest') }}</span> <!-- Added an icon example -->
@@ -50,7 +47,7 @@
                                 <label for="buy-price" class="form-label small">{{ _('Price') }}</label>
                                 <div class="input-group input-group-sm">
                                     <input type="text" class="form-control" id="buy-price" value="{{ _('Market Price') }}" disabled>
-                                    <span id="buy-price-currency" class="input-group-text">DUMMY USDT</span>
+                                    <span id="buy-price-currency" class="input-group-text buy-price-currency">DUMMY USDT</span>
                                 </div>
                             </div>
                             <div class="mb-3">
@@ -166,24 +163,130 @@
                             <!-- Sell Button -->
                             <div class="d-grid mt-4">
                                 <button type="button" class="btn btn-danger">
-                                    {{ _('Sell DUMMY BTC') }}
+                                    {{ _('Sell BTC') }}
                                 </button>
                             </div>
                         </div>
                     </div>
                 </div> <!-- End Buy/Sell Row -->
-            </div> <!-- End Spot Tab Pane -->
+            </div> 
+            <!-- End Spot Tab Pane -->
 
-            <!-- Placeholder Panes for other tabs (Cross, Isolated, Grid) -->
-            <div class="tab-pane fade" id="cross-tab-pane" role="tabpanel" aria-labelledby="cross-tab" tabindex="0">{{ _('Cross Trading UI Placeholder') }}</div>
-            <div class="tab-pane fade" id="isolated-tab-pane" role="tabpanel" aria-labelledby="isolated-tab" tabindex="0">{{ _('Isolated Trading UI Placeholder') }}</div>
-            <div class="tab-pane fade" id="grid-tab-pane" role="tabpanel" aria-labelledby="grid-tab" tabindex="0">{{ _('Grid Trading UI Placeholder') }}</div>
+            <!-- Placeholder Kraken 🐙 -->
+            <div class="tab-pane fade" id="futures-tab-pane" role="tabpanel" aria-labelledby="futures-tab" tabindex="0">
+                {{ symbol_search_bar.render_symbol_bar('futures', 'kraken-futures') }}
+                {{acc_balance.render_account_balance('futures', 'kraken-futures')}}
+                <div class="row g-4">
+                    <div class="col-lg-12">
+                        <div class="border rounded p-3">
+                            <div class="row g-3">
+                                <!-- Order Type: Market / Limit -->
+                                <div class="col-md-3">
+                                    <label class="form-label small">{{ _('Order Type') }}</label>
+                                    <select class="form-select form-select-sm" id="futures-order-type">
+                                        <option value="market">{{ _('Market') }}</option>
+                                    </select>
+                                </div>
+                                <!-- Leverage -->
+                               <!--  <div class="col-md-3">
+                                    <label class="form-label small">{{ _('Leverage') }}</label>
+                                    <select class="form-select form-select-sm" id="futures-leverage" disabled>
+                                        <option value="1">1x</option>
+                                        <option value="2">2x</option>
+                                        <option value="5">5x</option>
+                                        <option value="10">10x</option>
+                                        <option value="20">20x</option>
+                                    </select>
+                                </div> -->
+                                <!-- Margin Required -->
+                               <!--  <div class="col-md-3">
+                                    <label class="form-label small">{{ _('Margin Required') }}</label>
+                                    <input type="text" class="form-control form-control-sm" id="futures-margin-required" value="0.00 USDT" disabled>
+                                </div> -->
+                                <!-- Symbol (dummy) -->
+                               <div class="col-md-3">
+                                    <label class="form-label small">{{ _('Symbol') }}</label>
+                                    <div class="form-control form-control-sm disabled bg-body-secondary">
+                                        <span class="symbol-selected-kraken-futures"></span>
+                                        <span id="symbol-price-futures">--.--</span>
+                                    </div>  <!-- CORRECTED closing tag -->
+                                    <input hidden type="text" class="form-control form-control-sm" id="futures-symbol" value="BTCUSD" disabled>
+                                </div>
+                            </div>
+                            <div class="row g-3 mt-2">
+                                <!-- Entry Price (for limit) -->
+                                <!-- <div class="col-md-3">
+                                    <label class="form-label small">{{ _('Entry Price') }}</label>
+                                    <span class="buy-price-currency"></span>
+                                    <input type="number" class="form-control form-control-sm" id="futures-entry-price" placeholder="{{ _('Market Price') }}">
+                                </div> -->
+                                <!-- Amount -->
+                                <div class="col-md-3">
+                                    <label class="form-label small">{{ _('Amount') }}</label>
+                                    <input type="number" class="form-control form-control-sm" id="futures-amount" placeholder="0.000">
+                                </div>
+                                <!-- Stop Loss -->
+                                <div class="col-md-3">
+                                    <label class="form-label small">{{ _('Stop Loss') }}</label>
+                                    <input type="number" class="form-control form-control-sm" id="futures-stop-loss" placeholder="0.00">
+                                </div>
+                                <!-- Take Profit -->
+                                <div class="col-md-3">
+                                    <label class="form-label small">{{ _('Take Profit') }}</label>
+                                    <input type="number" class="form-control form-control-sm" id="futures-take-profit" placeholder="0.00">
+                                </div>
+                            </div>
+                            <div class="row g-3 mt-3">
+                                <!-- Action Buttons -->
+                                <div class="col-md-3 d-grid">
+                                    <button type="button" class="btn btn-success" id="futures-open-long">{{ _('Open Long') }}</button>
+                                </div>
+                                <div class="col-md-3 d-grid">
+                                    <button type="button" class="btn btn-danger" id="futures-open-short">{{ _('Open Short') }}</button>
+                                </div>
+                               <!--  <div class="col-md-3 d-grid">
+                                    <button type="button" class="btn btn-outline-success" id="futures-close-long">{{ _('Close Long') }}</button>
+                                </div>
+                                <div class="col-md-3 d-grid">
+                                    <button type="button" class="btn btn-outline-danger" id="futures-close-short">{{ _('Close Short') }}</button>
+                                </div> -->
+                            </div>
+                            <div class="row mt-3">
+                                <div class="col-12">
+                                    <div class="alert alert-info small mb-0" id="futures-info-alert">
+                                       
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Placeholder Kraken 🐙 -->
+
+            <!-- Bingx Spot 🔷 -->
+            <div class="tab-pane fade" id="bingx-spot-tab-pane" role="tabpanel" aria-labelledby="bingx-spot-tab" tabindex="0">
+                {{ symbol_search_bar.render_symbol_bar('bingx-spot', 'bingx-spot') }}
+                {{ acc_balance.render_account_balance('bingx-spot', 'bingx-spot') }}
+                {{ trading_order_maker.render_trading_order_maker('spot', 'bingx-spot') }}
+            </div>
+            <!-- Bingx Spot 🔷 -->
+
+             <!-- Bingx Futures 🔷⏰ -->
+            <div class="tab-pane fade" id="bingx-futures-tab-pane" role="tabpanel" aria-labelledby="bingx-futures-tab" tabindex="0">
+               {{ symbol_search_bar.render_symbol_bar('bingx-futures', 'bingx-futures') }}
+                {{ acc_balance.render_account_balance('bingx-futures', 'bingx-futures') }}
+                {{ trading_order_maker.render_trading_order_maker('futures', 'bingx-futures') }}
+            </div>
+            <!-- Bingx Futures 🔷⏰ -->
+       
         </div> <!-- End Tab Content -->
     
         <!-- Trades Table -->
-        <div class="mt-4">
+        <div class="mt-4"  style="max-height: 500px; overflow-y: scroll;">
             <h3 class="font-medium mb-2">{{ _('Recent Trades') }}</h3>
-            <table class="table table-sm table-striped scrollable-table">
+            <table class="table ">
                 <thead>
                     <tr>
                         <th>{{ _('Date') }}</th>
@@ -195,7 +298,10 @@
                         <th>{{ _('Status') }}</th>
                         <!-- <th class="text-end">{{ _('Stop Loss') }}</th>
                         <th class="text-end">{{ _('Take Profit') }}</th> -->
-                        <th>{{ _('Close Condition') }}</th>
+                        <th>{{ _('Exchange') }}</th>
+                        <th>{{ _('Stop Loss') }}</th>
+                        <th>{{ _('Take profit') }}</th>
+                        <th>{{ _('Leverage') }}</th>
                         <th>{{ _('Comment') }}</th>
                     </tr>
                 </thead>
@@ -212,4 +318,5 @@
 </div> <!-- End Card -->
 
 <!-- Add component-specific JavaScript -->
+ <script src="{{ url_for('static', filename='js/partials/trading_exchange_components.js') }}"></script>
 <script src="{{ url_for('static', filename='js/partials/trading_component.js') }}"></script>
