@@ -3,9 +3,23 @@ import logging
 import sys
 from flask import Flask
 from app.Aplicacion import Application
-from app.iu.routes import routes_bp
 from app.config import Config
+from app.viewmodels.services.llm import download_model, DeepSeekPPOAgent, QwenTradingAssistant, MODEL_PATHS
 
+# Descargar los modelos
+download_model(
+    MODEL_PATHS["qwen"]["repo_id"],
+    MODEL_PATHS["qwen"]["file_name"],
+    MODEL_PATHS["qwen"]["dest_dir"]
+)
+
+download_model(
+    MODEL_PATHS["ppo_agent"]["repo_id"],
+    MODEL_PATHS["ppo_agent"]["file_name"],
+    MODEL_PATHS["ppo_agent"]["dest_dir"]
+)
+
+from app.iu.routes import routes_bp
 # Configuración del logging
 logging.basicConfig(
     level=logging.INFO,

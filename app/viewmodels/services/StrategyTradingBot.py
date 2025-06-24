@@ -4,6 +4,17 @@ import random
 from app.viewmodels.api.kraken.KrakenAPI import KrakenAPI
 from app.viewmodels.services.TradingBot import TradingConfig
 from app.models.strategies import get_strategy_by_id
+from app.viewmodels.services.llm import DeepSeekPPOAgent, QwenTradingAssistant, MODEL_PATHS
+
+input_dim = 30
+output_dim = 3
+
+qwen_assistant = QwenTradingAssistant(model_path=MODEL_PATHS["qwen"]["model_path"])
+ppo_agent = DeepSeekPPOAgent(
+    model_path=MODEL_PATHS["ppo_agent"]["model_path"],
+    input_dim=input_dim,
+    output_dim=output_dim
+)
 
 class StrategyTradingBot:
     def __init__(self, user_id, exchange: KrakenAPI, config: dict):
@@ -30,31 +41,52 @@ class StrategyTradingBot:
             import time
             time.sleep(5)
             strategy = self.get_strategy()
-            market_data = self.get_market_data()
-            decision = self.interact_with_llm(strategy, market_data)
+            decision = self.interact_with_llm(strategy)
             self.execute_action(decision)
 
     def get_strategy(self):
         # Simulate fetching a trading strategy from a database.
         return "Simple moving average crossover strategy."
 
-    def get_market_data(self):
-        # Simulate retrieving market data.
-        return {"price": random.uniform(100, 200)}
 
-    def interact_with_llm(self, strategy, market_data):
+    def interact_with_llm(self, strategy):
+        timeframe = self.config.timeframe
+        # since 10 days ago
+        # since = int(time.time() - (10 * 24 * 60 * 60))
+        market_data = self.exchange.fetch_ohlcv_optimized(self.config.trading_pair, timeframe)
         strategy_id = self.config.strategy_id
         if not strategy_id:
-            prompt = "Should I buy or sell?"
+            strategy_prompt = "Should I buy or sell?"
         strategy =  get_strategy_by_id(self.user_id, strategy_id)
 
         if not strategy:
-            prompt = "Should I buy or sell?"
+            strategy_prompt = "Should I buy or sell?"
         else:
-            prompt = strategy.text
+            strategy_prompt = strategy.text
 
-        print(f"Prompt: {prompt}")
-        choices = [ "wait"]
+        qwen_strategy = qwen_assistant.generate_strategy(
+            current_market=market_data,
+            strategy_prompt=strategy_prompt,
+            orders_made=self.trades
+        )
+
+        qwen_output = qwen_assistant.parse_strategy(qwen_strategy)
+
+        if qwen_output == None:
+            print("#"*30)
+            print("🔴 QWEN NO RESPONDIO UN JSON")
+            print("#"*30)
+            return []
+        else:
+            estado_ambiente = [0.5]*input_dim
+            trading_action = ppo_agent.execute_action(qwen_output, estado_ambiente)
+
+            print("#"*30)
+            print(f"✨ trading_action: {trading_action}")
+            print(f"✨ qwen_output: {qwen_output}" )
+            print("#"*30)
+
+        choices = [ qwen_output["action"] ]
         return random.choice(choices)
 
     def execute_action(self, decision):
