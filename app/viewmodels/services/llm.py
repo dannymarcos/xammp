@@ -1,19 +1,12 @@
 import torch
-import ccxt
 import json
-import time
-import pandas as pd
-from datetime import datetime
-import requests
 from transformers import AutoTokenizer
-from llama_cpp import Llama
 import re
 import json
 from huggingface_hub import hf_hub_download
 import os
 from pathlib import Path
 import torch.nn as nn
-import torch.nn.functional as F
 
 BASE_DIR = Path(__file__).parent.parent.parent
 MODELS_DIR = os.path.join(BASE_DIR, "..", "llm", "models")
@@ -47,6 +40,7 @@ def download_model(REPO_ID, FILENAME, SAVE_PATH):
     """
     # Construct the full path where the model is expected to be
     full_model_path = os.path.join(SAVE_PATH, FILENAME)
+    os.makedirs(SAVE_PATH, exist_ok=True)
 
     # Check if the model file already exists at the destination
     if os.path.exists(full_model_path):
@@ -67,6 +61,9 @@ def download_model(REPO_ID, FILENAME, SAVE_PATH):
         )
         print(f"Modelo descargado en: {model_path}")
         return model_path
+
+from app.config import Config
+
 class PPOAgent(nn.Module):
     def __init__(self, input_dim, output_dim):
         super().__init__()
@@ -93,90 +90,141 @@ class PPOAgent(nn.Module):
     def forward(self, x):
         # Solo necesitamos la parte de la política para la inferencia
         return self.pi_mu_net(x)
-      
-class QwenTradingAssistant:
-    def __init__(self, model_path, tokenizer_name="Qwen/Qwen1.5-1.8B-Chat"):
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-        self.llm = Llama(model_path=model_path, n_ctx=4096, n_threads=6)
-    
-    def generate_strategy(self, current_market, strategy_prompt, orders_made=[]):
-        prompt = self.tokenizer.apply_chat_template(
-            [
-                # Rol principal: Muy directo.
-                {"role": "system", "content": "You are a concise trading decision assistant."},
 
-                # Formato de respuesta: Ahora solo con 'action'. Súper claro.
-                {"role": "system", "content": "Your response MUST be a JSON object with a single key: 'action' (values: 'buy', 'sell', 'wait'). Example: {\"action\": \"buy\"}."},
+if Config().ENVIRONMENT != "local":
+    from llama_cpp import Llama
 
-                # La estrategia: Sigue siendo la instrucción central y estricta.
-                {"role": "system", "content": f"Strictly apply this trading strategy: {strategy_prompt}"},
-
-                # Datos del mercado: Directo al grano.
-                {"role": "system", "content": f"Current market data: {current_market}"},
-
-                # Órdenes previas: Da contexto sin pedirle que "razone" sobre ellas.
-                {"role": "system", "content": f"Just for your context here are the Previously made orders: {str(orders_made)}"},
-
-                # La instrucción final para el usuario:
-                # Pídele que aplique la estrategia y determine la acción, enfatizando solo el JSON.
-                {"role": "user", "content": "Taking into consideration the current market data, the previously made orders and the trading strategy. What is the best trading action ('buy', 'sell', or 'wait')? Provide ONLY the JSON output as specified."},
-            ],
-            tokenize=False,
-            add_generation_prompt=True
-        )
+    class QwenTradingAssistant:
+        def __init__(self, model_path, tokenizer_name="Qwen/Qwen1.5-1.8B-Chat"):
+            self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+            self.llm = Llama(model_path=model_path, n_ctx=4096, n_threads=6)
         
-        print(f"LLM thinking...")
-        output = self.llm.create_completion(
-            prompt=prompt,
-            max_tokens=300,
-            temperature=0.5,
-            stop=["<|im_end|>"]
-        )
+        def generate_strategy(self, current_market, strategy_prompt, orders_made=[]):
+            prompt = self.tokenizer.apply_chat_template(
+                [
+                    # Rol principal: Muy directo.
+                    {"role": "system", "content": "You are a concise trading decision assistant."},
+
+                    # Formato de respuesta: Ahora solo con 'action'. Súper claro.
+                    {"role": "system", "content": "Your response MUST be a JSON object with a single key: 'action' (values: 'buy', 'sell', 'wait'). Example: {\"action\": \"buy\"}."},
+
+                    # La estrategia: Sigue siendo la instrucción central y estricta.
+                    {"role": "system", "content": f"Strictly apply this trading strategy: {strategy_prompt}"},
+
+                    # Datos del mercado: Directo al grano.
+                    {"role": "system", "content": f"Current market data: {current_market}"},
+
+                    # Órdenes previas: Da contexto sin pedirle que "razone" sobre ellas.
+                    {"role": "system", "content": f"Just for your context here are the Previously made orders: {str(orders_made)}"},
+
+                    # La instrucción final para el usuario:
+                    # Pídele que aplique la estrategia y determine la acción, enfatizando solo el JSON.
+                    {"role": "user", "content": "Taking into consideration the current market data, the previously made orders and the trading strategy. What is the best trading action ('buy', 'sell', or 'wait')? Provide ONLY the JSON output as specified."},
+                ],
+                tokenize=False,
+                add_generation_prompt=True
+            )
+            
+            print(f"LLM thinking...")
+            output = self.llm.create_completion(
+                prompt=prompt,
+                max_tokens=300,
+                temperature=0.5,
+                stop=["<|im_end|>"]
+            )
+            
+            texto_estrategia = output["choices"][0]["text"].strip()
+            print(f"LLM Respuesta: {texto_estrategia}")
+            return texto_estrategia
         
-        texto_estrategia = output["choices"][0]["text"].strip()
-        print(f"LLM Respuesta: {texto_estrategia}")
-        return texto_estrategia
-    
-    def parse_strategy(self, strategy_text):
-        try:
-            return json.loads(strategy_text)
-        except Exception as e:
-            # Try to get the response as a JSON object
-            res = self.extract_json_from_llm_response(strategy_text)
-            return res
-        
-    def extract_json_from_llm_response(self, llm_response_string):
-        """
-        Manually extracts and parses a JSON object from a string that might contain
-        additional conversational text before and after the JSON.
-
-        Args:
-            llm_response_string (str): The full string response received from the LLM.
-
-        Returns:
-            dict or None: The parsed JSON object as a Python dictionary,
-                        or None if no valid JSON object is found.
-        """
-        # Regex to find a JSON block, optionally wrapped in markdown code blocks (```json ... ```)
-        # It looks for the first occurrence of '{' and tries to match until '}'
-        # This regex is relatively robust but might fail on very complex nested JSON
-        # or malformed JSON where curly braces don't match.
-        json_match = re.search(r'```json\s*(\{.*\})\s*```|(\{.*\})', llm_response_string, re.DOTALL)
-
-        if json_match:
-            # Prioritize the content within ```json ... ``` if found, otherwise take the raw JSON
-            json_str = json_match.group(1) if json_match.group(1) else json_match.group(2)
+        def parse_strategy(self, strategy_text):
             try:
-                # Parse the extracted JSON string into a Python dictionary
-                parsed_json = json.loads(json_str)
-                return parsed_json
-            except json.JSONDecodeError as e:
-                print(f"Error decoding JSON: {e}")
-                print(f"Attempted to decode: {json_str}")
+                return json.loads(strategy_text)
+            except Exception as e:
+                # Try to get the response as a JSON object
+                res = self.extract_json_from_llm_response(strategy_text)
+                return res
+            
+        def extract_json_from_llm_response(self, llm_response_string):
+            """
+            Manually extracts and parses a JSON object from a string that might contain
+            additional conversational text before and after the JSON.
+
+            Args:
+                llm_response_string (str): The full string response received from the LLM.
+
+            Returns:
+                dict or None: The parsed JSON object as a Python dictionary,
+                            or None if no valid JSON object is found.
+            """
+            # Regex to find a JSON block, optionally wrapped in markdown code blocks (```json ... ```)
+            # It looks for the first occurrence of '{' and tries to match until '}'
+            # This regex is relatively robust but might fail on very complex nested JSON
+            # or malformed JSON where curly braces don't match.
+            json_match = re.search(r'```json\s*(\{.*\})\s*```|(\{.*\})', llm_response_string, re.DOTALL)
+
+            if json_match:
+                # Prioritize the content within ```json ... ``` if found, otherwise take the raw JSON
+                json_str = json_match.group(1) if json_match.group(1) else json_match.group(2)
+                try:
+                    # Parse the extracted JSON string into a Python dictionary
+                    parsed_json = json.loads(json_str)
+                    return parsed_json
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    print(f"Attempted to decode: {json_str}")
+                    return None
+            else:
+                print("No JSON object found in the LLM response.")
                 return None
-        else:
-            print("No JSON object found in the LLM response.")
-            return None
+else:
+    class QwenTradingAssistant:
+        def __init__(self, model_path, tokenizer_name="Qwen/Qwen1.5-1.8B-Chat"):
+            pass
+        
+        def generate_strategy(self, current_market, strategy_prompt, orders_made=[]):
+            return "{\"action\": \"buy\"}"
+        
+        def parse_strategy(self, strategy_text):
+            try:
+                return json.loads(strategy_text)
+            except Exception as e:
+                # Try to get the response as a JSON object
+                res = self.extract_json_from_llm_response(strategy_text)
+                return res
+            
+        def extract_json_from_llm_response(self, llm_response_string):
+            """
+            Manually extracts and parses a JSON object from a string that might contain
+            additional conversational text before and after the JSON.
+
+            Args:
+                llm_response_string (str): The full string response received from the LLM.
+
+            Returns:
+                dict or None: The parsed JSON object as a Python dictionary,
+                            or None if no valid JSON object is found.
+            """
+            # Regex to find a JSON block, optionally wrapped in markdown code blocks (```json ... ```)
+            # It looks for the first occurrence of '{' and tries to match until '}'
+            # This regex is relatively robust but might fail on very complex nested JSON
+            # or malformed JSON where curly braces don't match.
+            json_match = re.search(r'```json\s*(\{.*\})\s*```|(\{.*\})', llm_response_string, re.DOTALL)
+
+            if json_match:
+                # Prioritize the content within ```json ... ``` if found, otherwise take the raw JSON
+                json_str = json_match.group(1) if json_match.group(1) else json_match.group(2)
+                try:
+                    # Parse the extracted JSON string into a Python dictionary
+                    parsed_json = json.loads(json_str)
+                    return parsed_json
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    print(f"Attempted to decode: {json_str}")
+                    return None
+            else:
+                print("No JSON object found in the LLM response.")
+                return None
 
 
 class DeepSeekPPOAgent:
@@ -199,4 +247,3 @@ class DeepSeekPPOAgent:
         print(f"🚀 Acción ejecutada: {action} | Señal: {qwen_output['action']}")
 
         return action
-        

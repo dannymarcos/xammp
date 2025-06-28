@@ -23,8 +23,8 @@ from app.models.trades import (
     update_trade_status,
 )
 from app.models.users import add_last_error_message
-from app.viewmodels.api.kraken.KrakenAPI import KrakenAPI
 from app.viewmodels.services.SimpleQTable import SimpleQTable
+from app.viewmodels.api.exchange.Exchange import ExchangeFactory
 from app.lib.utils.trading_strategies import (
     calculate_indicators,
     strategy_rsi,
@@ -66,6 +66,10 @@ class TradingConfig(BaseModel):
 
     @field_validator("trading_pair")
     def validate_pair(cls, v):
+        """"
+        Validate pair
+        """
+
         if "/" not in v:
             raise ValueError("Pair must contain '/' (e.g., BTC/USD)")
         return v.upper()
@@ -99,48 +103,24 @@ class TradingBot:
     def __init__(
         self,
         user_id,
-        kraken_api: KrakenAPI,
-        bingx_exchange,
-        api_key: str,
-        api_secret: str,
+        exchange_factory: ExchangeFactory,
         config: Dict,
-        app_context_param=None,
-        wantend_exchange="kraken",
     ):
         if hasattr(self, "_initialized"):
             # logger.debug(f"Bot instance for user {user_id} already initialized, skipping initialization") # Can be noisy
             return
 
-        logger.info(f"Initializing trading bot for user {user_id}")
+        logger.info("Initializing trading bot for user %s", user_id)
 
         try:
             # Validate configuration
-            logger.debug(f"Validating configuration for user {user_id}")
+            logger.debug("Validating configuration for user %s", user_id)
             self.config = TradingConfig(**config)
             self.user_id = user_id
             # Use the provided kraken_api instance (can be real or mock)
-            self.kraken_api = kraken_api
-            self.bingx_exchange = bingx_exchange
-            self.wantend_exchange = wantend_exchange
+            self.exchange = exchange_factory ### CHANGE KRAKEN_API
 
-            logger.debug(f"Setting up exchange connection for user {user_id}")
-            # ccxt exchange for market data and possibly other calls not handled by kraken_api
-            # Ensure keys are provided even if using mock API for order placement, as ccxt needs them for market data
-            if not api_key or not api_secret:
-                logger.error("API keys are required for ccxt market data fetching.")
-                # Provide dummy keys if you absolutely must run without real keys for testing
-                # but fetch_ohlcv/ticker will likely fail unless mocked.
-                api_key = api_key or "dummy_key"
-                api_secret = api_secret or "dummy_secret"
-
-            self.exchange = ccxt.kraken(
-                {
-                    "apiKey": api_key,
-                    "secret": api_secret,
-                    "enableRateLimit": True,
-                    "options": {"adjustForTimeDifference": True},
-                }
-            )
+            logger.debug("Setting up exchange connection for user %s", user_id)
 
             # Trading state
             self.running = False
@@ -160,24 +140,20 @@ class TradingBot:
                 q_table_path=f"q_tables/q_table_{user_id}.csv"
             )  # User-specific Q-table path
 
-            logger.info(
-                f"✅ Successfully initialized bot for user {user_id} \n {self.config.model_dump_json(indent=4)}"
-            )
-            logger.debug(
-                f"⚙️ Configuration for user {user_id}:\n{self.config.model_dump_json(indent=4)}"
-            )
+            logger.info("✅ Successfully initialized bot for user %s\n%s", user_id, self.config.model_dump_json(indent=4))
+            logger.debug("⚙️ Configuration for user %s:\n%s", user_id, self.config.model_dump_json(indent=4))
         except Exception as e:
-            logger.error(f"Failed to initialize bot for user {user_id}: {str(e)}")
-            logger.debug(f"Initialization error details: {traceback.format_exc()}")
-            self._add_bot_error(f"Initialization failed: {e}")
+            logger.error("Failed to initialize bot for user %s: %s", user_id, str(e))
+            logger.debug("Initialization error details: %s", traceback.format_exc())
+            self._add_bot_error(f"Initialization failed: %s", e)
             raise  # Re-raise to indicate failure
 
     def _force_stop(self):
         self.running = False
-        print(f"🛑 Forced stop for bot {self.user_id}")
+        print("🛑 Forced stop for bot %s", self.user_id)
 
     def _add_bot_error(self, error):
-        logger.error(f"Bot Error for {self.user_id}: {error}")
+        logger.error("Bot Error for %s: %s", self.user_id, error)
         self.bot_errors.append(error)
         # Keep a limited history of errors
         self.bot_errors = self.bot_errors[-10:]  # Keep last 10 errors
@@ -283,7 +259,7 @@ class TradingBot:
 
     def _run_loop(self):
         """Main trading loop"""
-        logger.info(f"🚀 Starting trading loop for user {self.user_id}")
+        logger.info("🚀 Starting trading loop for user %s", self.user_id)
         loop_count = 0
         # Consider managing an initial state or waiting period
         # time.sleep(5) # Optional initial delay
@@ -293,9 +269,7 @@ class TradingBot:
             # logger.debug(f"--- Trading loop iteration {loop_count} for user {self.user_id} ---") # Can be noisy
 
             if self._should_stop():
-                logger.info(
-                    f"Bot _should_stop condition met for user {self.user_id}. Exiting loop."
-                )
+                logger.info("Bot _should_stop condition met for user %s. Exiting loop.", self.user_id)
                 break  # Exit the loop if stop condition is met
 
             try:
@@ -904,24 +878,23 @@ class TradingBot:
             # The price parameter here is not used by Kraken for MARKET orders,
             # but is kept in the signature as it was in the original code.
             # The actual fill price will be in the response or fetched later.
-            if self.wantend_exchange == "bingx":
-                order_data, _ = self.bingx_exchange.add_order(
-                    side,
-                    "BTC/USDT:USDT",
-                    (
-                        0.0001
-                        if self.config.trade_amount < 0.001
-                        else self.config.trade_amount
-                    ),
-                )
-            else:
-                order_data, _ = self.kraken_api.add_order(
-                    order_type="market",  # Using market orders as per original code logic
-                    order_direction=side,
-                    volume=amount_to_trade,  # Amount to trade (base currency)
-                    symbol=self.config.trading_pair,
-                    order_made_by="bot",
-                )
+
+            ### CHANGE KRAKEN_API AND BINGXEXCHANGE
+            volume = 0.0001 if self.config.trade_amount < 0.001 else self.config.trade_amount
+            
+            order_data, _ = self.exchange.add_order(
+                side,
+                "BTC/USDT:USDT",
+                volume,
+            )
+
+            # order_data, _ = self.exchange.add_order(
+            #     order_type="market",  # Using market orders as per original code logic
+            #     order_direction=side,
+            #     volume=amount_to_trade,  # Amount to trade (base currency)
+            #     symbol=self.config.trading_pair,
+            #     order_made_by="bot",
+            # )
 
             if not order_data:
                 error = order_data["error"]

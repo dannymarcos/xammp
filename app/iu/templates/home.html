@@ -274,7 +274,8 @@ async function placeOrder(orderDirection) {
 
 
     async function getCryptos() {
-        // get cryptos 
+        // get cryptos
+      console.log(`{{url_for('routes.get_cryptos')}}`)
       const res = await fetch(`{{url_for('routes.get_cryptos')}}`, {
         method: "POST",
         headers: {

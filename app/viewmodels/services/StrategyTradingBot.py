@@ -1,10 +1,10 @@
 import random
 import threading
 import random
-from app.viewmodels.api.kraken.KrakenAPI import KrakenAPI
 from app.viewmodels.services.TradingBot import TradingConfig
 from app.models.strategies import get_strategy_by_id
 from app.viewmodels.services.llm import DeepSeekPPOAgent, QwenTradingAssistant, MODEL_PATHS
+from app.viewmodels.api.exchange.Exchange import ExchangeFactory
 
 input_dim = 30
 output_dim = 3
@@ -17,7 +17,7 @@ ppo_agent = DeepSeekPPOAgent(
 )
 
 class StrategyTradingBot:
-    def __init__(self, user_id, exchange: KrakenAPI, config: dict):
+    def __init__(self, user_id, exchange: ExchangeFactory, config: dict):
         self.user_id = user_id
         self.exchange = exchange
         self.running = False

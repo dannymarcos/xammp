@@ -25,3 +25,16 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil')
     TRADING_MODE="spot"
     SYMBOL = "XBTUSD"
+    ENVIRONMENT = os.getenv("ENVIRONMENT")
+    KRAKEN_API_KEY = os.getenv("KRAKEN_API_KEY")
+    KRAKEN_API_SECRET = os.getenv("KRAKEN_API_SECRET")
+    KRAKEN_FUTURE_API_KEY = os.getenv("KRAKEN_FUTURE_API_KEY")
+    KRAKEN_FUTURE_API_SECRET = os.getenv("KRAKEN_FUTURE_API_SECRET")
+    KRAKEN_SPOT_API_KEY = os.getenv("KRAKEN_SPOT_API_KEY")
+    KRAKEN_SPOT_API_SECRET = os.getenv("KRAKEN_SPOT_API_SECRET")
+    BINGX_API_KEY = os.getenv("BINGX_API_KEY")
+    BINGX_API_SECRET = os.getenv("BINGX_API_SECRET")
+    BINGX_API_KEY_FUTURES = os.getenv("BINGX_API_KEY_FUTURES")
+    BINGX_API_SECRET_FUTURES = os.getenv("BINGX_API_SECRET_FUTURES")
+
+config = Config()

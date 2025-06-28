@@ -4,13 +4,11 @@ import json
 import logging
 import os
 import secrets
-import smtplib  # For sending emails
 import time  # Importar time desde la biblioteca estándar de Python
 import traceback
 from datetime import datetime
 
 # from app.models.shared_models import  ReferralLink, Withdrawal, Strategy, logger
-from email.mime.text import MIMEText
 
 import numpy as np
 import pandas as pd
@@ -20,7 +18,6 @@ import tensorflow as tf
 from dotenv import load_dotenv
 from flask import (
     Blueprint,
-    current_app,
     jsonify,
     redirect,
     render_template,
@@ -34,8 +31,7 @@ from flask_login import (  # Import Flask-Login functions
     login_user,
     logout_user,
 )
-from werkzeug.security import check_password_hash, generate_password_hash
-from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash
 
 from app.Aplicacion import db
 from app.models.create_db import db
@@ -43,23 +39,25 @@ from app.models.users import User, update_user_bot_status
 from app.models.trades import get_all_trades_from_user
 from app.models.strategies import get_all_strategies_from_user, Strategy
 
-from app.viewmodels.api.futures.KrakenFuturesAPI import KrakenFuturesAPI
 from app.viewmodels.api.spot.KrakenSpotApiAddOrder import KrakenSpotApiAddOrder
 from app.viewmodels.api.spot.KrakenSpotApiGetAccountBalance import (
     KrakenSpotApiGetAccountBalance,
 )
-from app.viewmodels.api.spot.KrakenSpotAPITicker import KrakenSpotAPI
 from app.viewmodels.services.GetMethodTrading import GetMethodTrading
 from app.viewmodels.services.GetSymbolTrading import GetSymbolTrading
 from app.viewmodels.services.TradingBotManager import TradingBotManager
+from app.viewmodels.api.spot.KrakenSpotAPITicker import KrakenSpotAPI
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-from app.viewmodels.api.kraken.KrakenAPIFutures import KrakenAPIFutures
-from app.viewmodels.api.kraken.KrakenAPISpot import KrakenAPISpot
+# from app.viewmodels.api.kraken.KrakenAPIFutures import KrakenAPIFutures
+# from app.viewmodels.api.futures.KrakenFuturesAPI import KrakenFuturesAPI
+# from app.viewmodels.api.spot.KrakenSpotAPITicker import KrakenSpotAPI
+# from app.viewmodels.api.kraken.KrakenAPISpot import KrakenAPISpot
+# from app.viewmodels.api.bingx.BingxExchange import BingxExchange
+from app.viewmodels.api.exchange.Exchange import ExchangeFactory
 from app.models.referral_link import ReferralLink
-from app.viewmodels.api.bingx.BingxExchange import BingxExchange
 
 #Iniciamos las variables de entorno desde el archivo .env
 load_dotenv()
@@ -150,10 +148,10 @@ def home():
         # total_generated = db.session.query(db.func.sum(Investment.total_generated)).filter_by(user_id=user.id).scalar() or 0
         
       
-        return render_template("home.html", current_language=current_language,get_translated_text=get_translated_text)
+        return render_template("home.html", current_language=current_language, get_translated_text=get_translated_text)
     except Exception as e:
         logger.error(f"Error in home route: {e}")
-        return render_template("home.html", error=str(e),get_translated_text=get_translated_text)
+        return render_template("home.html", error=str(e), get_translated_text=get_translated_text)
 
 @routes_bp.route("/strategies", methods=['GET', 'POST', 'DELETE'])
 @login_required
@@ -234,24 +232,13 @@ def start_bot_trading():
             'take_profit_pct': data.get('take_profit_pct', 0.04),
             'strategy_id': selected_strategy_id
         }
-        bingx_exchange = None
-        kraken_api = None
         # Initialize the appropriate Kraken API client
         
-        if trading_mode == 'spot':
-            if data.get("exchange") == "bingx":
-                bingx_exchange = BingxExchange(user_id=user_id)
-            else: 
-                kraken_api = KrakenAPISpot(user_id)
-        else:  # futures
-            if data.get("exchange") == "bingx":
-                bingx_exchange = BingxExchange(user_id=user_id, trading_mode="swap") # futures
-            else:
-                kraken_api = KrakenAPIFutures(user_id)
-     
+        name = "bingx" if data.get("exchange") == "bingx" else ("kraken_spot" if trading_mode == "spot" else "kraken_future")
+        exchange = ExchangeFactory().create_exchange(name=name, user_id=user_id)
         
         # Start the bot
-        if TradingBotManager.start_bot(user_id, kraken_api, bingx_exchange, config, wanted_exchange=data.get("exchange"), bot_id=bot_id):
+        if TradingBotManager.start_bot(user_id, exchange, config, bot_id=bot_id):
             # Update bot_status in the database
             current_bot_status = "running"
             update_user_bot_status(user_id, current_bot_status)
@@ -369,24 +356,24 @@ def get_trades():
         user_id = current_user.id
         bot_id = request.args.get("bot_id")
         by = request.args.get('by', 'all')
-        logger.info(f"Received get_trades request for bot_id: {bot_id}, by: {by} from user_id: {user_id}")
+        logger.info("Received get_trades request for bot_id: %s, by: %s from user_id: %s", bot_id, by, user_id)
         # TODO: Implement logic for bot_id
 
-        logger.debug(f"Getting trade history for user {user_id}, bot {bot_id}")
-        
+        logger.debug("Getting trade history for user %s, bot %s", user_id, bot_id)
+
         # Get the trade history from the database (this will need to be adapted for bot_id)
         trades = get_all_trades_from_user(user_id, by) # This might need bot_id
-        
+
         # Check if the bot is running and get any active trades (this will need to be adapted for bot_id)
         if TradingBotManager.is_bot_running(user_id): # This might need bot_id
-            logger.debug(f"Bot {bot_id} is running for user {user_id}, checking for active trades")
+            logger.debug("Bot %s is running for user %s, checking for active trades", bot_id, user_id)
             
             # Get the bot instance (this will need to be adapted for bot_id)
             bot = TradingBotManager._bots.get(user_id) # This might need bot_id
             
             # If the bot has active trades, add them to the trade history
             if bot and hasattr(bot, 'active_trades') and bot.active_trades:
-                logger.debug(f"Found {len(bot.active_trades)} active trades for user {user_id}")
+                logger.debug("Found %s active trades for user %s", len(bot.active_trades), user_id)
                 
                 # Convert active trades to the same format as the trade history
                 for active_trade in bot.active_trades:
@@ -404,12 +391,12 @@ def get_trades():
                         }
                         trades.append(trade_data)
         
-        logger.debug(f"Returning {len(trades)} trades for user {user_id}")
+        logger.debug("Returning %s trades for user %s", len(trades), user_id)
         return jsonify({"trades": trades}), 200
     
     except Exception as e:
-        logger.error(f"Error getting trades for user {current_user.id}: {str(e)}")
-        logger.debug(f"Error details: {traceback.format_exc()}")
+        logger.error("Error getting trades for user %s: %s", current_user.id, str(e))
+        logger.debug("Error details: %s", traceback.format_exc())
         return jsonify({"error": str(e), "trades": []}), 500
 
 
@@ -944,41 +931,62 @@ def get_account_balance():
         trading_mode = data.get("trading_mode")
         exchange_name = data.get("exchange_name") # it is the same trading_mode but we are migrating to exchange_name [spot and futures name is for kraken]
         
-        # Obtener el balance según el modo de trading
+        # Mapeo de nombres de exchange y sus configuraciones
+        exchange_config = {
+            "spot": {
+                "handler": KrakenSpotApiGetAccountBalance(),
+                "special_case": True
+            },
+            "futures": {
+                "factory_name": "kraken_future",
+                "error_status": 500
+            },
+            "bingx-spot": {
+                "factory_name": "bingx",
+                "error_status": 400
+            },
+            "bingx-futures": {
+                "factory_name": "bingx",
+                "trading_mode": "swap",
+                "error_status": 400
+            }
+        }
+
+        # Manejar caso especial de Kraken Spot
         if exchange_name == "spot":
-            get_account_balance = KrakenSpotApiGetAccountBalance()
-            balance_data = get_account_balance.get_account_balance(API_KEY_KRAKEN, API_SECRET_KRAKEN)
+            balance_data = exchange_config["spot"]["handler"].get_account_balance(
+                API_KEY_KRAKEN, API_SECRET_KRAKEN
+            )
             return jsonify(balance_data)
-        
-        elif exchange_name == "futures":
-            kraken_futures = KrakenAPIFutures(user_id=current_user.id)
-            balance = kraken_futures.get_account_balance()
-            if 'error' in balance:
-                logger.error(f"🙃 Error getting account balance: {balance['error']}")
-                return jsonify(balance), 500
+
+        # Manejar otros exchanges
+        if exchange_name in exchange_config:
+            config = exchange_config[exchange_name]
+            
+            # Crear instancia del exchange
+            factory_args = {"name": config["factory_name"], "user_id": current_user.id, "trading_mode": "spot"}
+            if "trading_mode" in config:
+                factory_args["trading_mode"] = config["trading_mode"]
+            
+            print(factory_args)
+            exchange = ExchangeFactory().create_exchange(
+                name=factory_args["name"],
+                user_id=factory_args["user_id"],
+                trading_mode=factory_args["trading_mode"]
+            )
+            
+            balance = exchange.get_account_balance()
+            
+            # Manejo de errores
+            if "error" in balance:
+                error_msg = balance["error"] if exchange_name == "futures" else balance
+                logger.error(f"🙃 Error getting account balance: {error_msg}")
+                return jsonify(balance), config["error_status"]
             
             return jsonify({"balance": balance})
-        
-        elif exchange_name == "bingx-spot":
-            bingx_exchange = BingxExchange(user_id=current_user.id)
-            balance = bingx_exchange.get_account_balance()
-            if 'error' in balance:
-                logger.error(f"🙃 Error getting account balance: {balance}")
-                return jsonify(balance), 400
-            
-            return jsonify({"balance": balance})
-        
-        elif exchange_name == "bingx-futures":
-            bingx_exchange = BingxExchange(user_id=current_user.id, trading_mode="swap")
-            balance = bingx_exchange.get_account_balance()
-            if 'error' in balance:
-                logger.error(f"🙃 Error getting account balance: {balance}")
-                return jsonify(balance), 400
-            
-            return jsonify({"balance": balance})
-        
-        else:
-            return jsonify({"error": "Invalid trading mode. Use 'spot' or 'futures'"}), 400
+
+        # Manejar modos inválidos
+        return jsonify({"error": "Invalid trading mode. Use 'spot' or 'futures'"}), 400
         
     except Exception as e:
         traceback.print_exc()
@@ -1012,32 +1020,73 @@ def get_symbol_trading():
         logger.error(f"Error getting cryptocurrencies: {e}")
         return jsonify({"error": str(e)}), 500
 
+# Configuración específica para cada exchange
+exchange_config = {
+    "futures": {
+        "factory_name": "kraken_future",
+        "trading_mode": None,
+        "requires_ticker": True
+    },
+    "spot": {
+        "factory_name": "kraken_spot",
+        "trading_mode": None,
+        "requires_ticker": True
+    },
+    "bingx-spot": {
+        "factory_name": "bingx",
+        "trading_mode": None,
+        "requires_ticker": False
+    },
+    "bingx-futures": {
+        "factory_name": "bingx",
+        "trading_mode": "swap",
+        "requires_ticker": False
+    }
+}
+
 @routes_bp.route("/get_cryptos", methods=['POST'])
 @login_required
 def get_cryptos():
     """Get available cryptocurrencies"""
-    cryptos = []
     try:
         data = request.get_json()
-        trading_mode = data.get("trading_mode")
         exchange_name = data.get("exchange_name")
 
+        # Mapeo para el factory y el trading_mode
+        factory_map = {
+            "futures":      {"name": "kraken_future", "trading_mode": None},
+            "spot":         {"name": "kraken_spot",   "trading_mode": None},
+            "bingx-spot":   {"name": "bingx",         "trading_mode": "spot"},
+            "bingx-futures":{"name": "bingx",         "trading_mode": "swap"},
+        }
+
+        if exchange_name not in factory_map:
+            return jsonify({"error": "Invalid exchange name"}), 400
+
+        factory_args = {
+            "name": factory_map[exchange_name]["name"],
+            "user_id": current_user.id
+        }
+        if factory_map[exchange_name]["trading_mode"]:
+            factory_args["trading_mode"] = factory_map[exchange_name]["trading_mode"]
+
+        exchange = None
+
+        if exchange_name != "spot":
+            exchange = ExchangeFactory().create_exchange(**factory_args)
+
+        # Lógica para cada tipo de exchange
         if exchange_name == "futures":
-            logger.info("Processing futures trading mode")
-            futures_client = KrakenFuturesAPI()
-            data, status = futures_client.get_ticker_kraken()
-            if status != 200:
-                logger.error(f"Futures ticker error: {data}")
-                return jsonify(data), status
-            
-            cryptos, status = futures_client.get_symbol_and_markPrice()
-            kraken = KrakenAPIFutures(user_id=current_user.id)
-            cryptos, status = kraken.get_cryptos()
-            cryptos = {"cryptos": cryptos}
-            if status != 200:
-                logger.error(f"Futures symbols error: {cryptos}")
-                return jsonify({"cryptos": cryptos}), status
-            
+            # Kraken Futures
+            if hasattr(exchange, "get_cryptos"):
+                cryptos, status = exchange.get_cryptos()
+                if status != 200:
+                    logger.error(f"Futures symbols error: {cryptos}")
+                    return jsonify({"cryptos": cryptos}), status
+                return jsonify({"cryptos": cryptos})
+            else:
+                return jsonify({"error": "Not supported"}), 500
+
         elif exchange_name == "spot":
             spot_client = KrakenSpotAPI()
             data, status = spot_client.get_ticker_kraken()
@@ -1050,32 +1099,33 @@ def get_cryptos():
             if status != 200:
                 logger.error(f"Spot symbols error: {cryptos}")
                 return jsonify(cryptos), status
-        
-        elif exchange_name == "bingx-spot":
-            bingx_client = BingxExchange(user_id=current_user.id)
-            cryptos, err = bingx_client.get_cryptos()
+
+            return jsonify(cryptos)
+
+            # Kraken Spot in future
+            # if hasattr(exchange, "get_symbol_and_ultimate_price_trade"):
+            #     cryptos, status = exchange.get_symbol_and_ultimate_price_trade()
+            #     if status != 200:
+            #         logger.error(f"Spot symbols error: {cryptos}")
+            #         return jsonify(cryptos), status
+            #     return jsonify({"cryptos": cryptos})
+            # else:
+            #     return jsonify({"error": "Not supported"}), 500
+
+        elif exchange_name in ["bingx-spot", "bingx-futures"]:
+            # BingX Spot o Futures
+            cryptos, err = exchange.get_cryptos()
             if err:
                 logger.error(f"Bingx ticker error: {cryptos}")
                 return jsonify({"error": f"Bingx ticker error: {cryptos}"}), 400
-            
             return jsonify({"cryptos": cryptos})
 
-        elif exchange_name == "bingx-futures":
-            bingx_client = BingxExchange(user_id=current_user.id, trading_mode="swap")
-            cryptos, err = bingx_client.get_cryptos()
-            if err:
-                logger.error(f"Bingx ticker error: {cryptos}")
-                return jsonify({"error": f"Bingx ticker error: {cryptos}"}), 400
-
-            return jsonify({"cryptos": cryptos})
-        
-        return jsonify(cryptos)
-        # return jsonify({"error": "Invalid trading mode. Use 'spot' or 'futures'"}), 400
+        return jsonify({"error": "Invalid trading mode"}), 400
 
     except Exception as e:
         logger.error(f"Error getting cryptocurrencies: {e}")
         return jsonify({"error": str(e)}), 500
-    
+
 #for single crypto with symbol
 @routes_bp.route("/get_symbol_price", methods=['GET'])
 @login_required
@@ -1088,21 +1138,22 @@ def get_symbol_price():
         
         exchange = request.args.get('exchange')
         if exchange == "futures":
-            kraken = KrakenAPIFutures(user_id=current_user.id)
-            data = kraken.get_symbol_price(symbol)
+            exchange = ExchangeFactory().create_exchange(name="kraken_future", user_id=current_user.id)
+            data = exchange.get_symbol_price(symbol)
             
             return {"price": data[0], "status": data[1]}
         
         elif exchange == "bingx-spot":
-            bingx_client = BingxExchange(user_id=current_user.id)
-            price, error = bingx_client.get_symbol_price(symbol)
+            exchange = ExchangeFactory().create_exchange(name="bingx", user_id=current_user.id, trading_mode="spot")
+            price, error = exchange.get_symbol_price(symbol)
             if error:
                 logger.error(f"Bingx ticker error: {price}")
                 return jsonify({"error": f"Bingx ticker error: {price}"}), 400
             
             return jsonify({"price": price , "symbol": symbol})
-        spot_client = KrakenAPISpot(user_id=current_user.id)
-        data = spot_client.get_symbol_price(symbol)
+        
+        exchange = ExchangeFactory().create_exchange(name="kraken_spot", user_id=current_user.id)
+        data = exchange.get_symbol_price(symbol)
         if data[1] != 200:
             return jsonify(data[0]), data[1]
         
@@ -1136,11 +1187,12 @@ def close_order():
         trading_mode = data.get("trading_mode")
         user_id = current_user.id
 
+        exchange = ExchangeFactory().create_exchange(name="kraken_future", user_id=user_id)
+
         if trading_mode == "spot":
             return jsonify({"error": "Spot trading mode not supported"}), 400
         elif trading_mode == "futures":
-            kraken = KrakenAPIFutures(user_id=user_id)
-            kraken.close_order(symbol=data.get("symbol"), side=data.get("orderDirection"), params=data.get("params"))
+            exchange.close_order(symbol=data.get("symbol"), side=data.get("orderDirection"), params=data.get("params"))
         else:
             return jsonify({"error": "Invalid trading mode"}), 400
 
@@ -1185,10 +1237,9 @@ def add_order():
                     return jsonify({"error": f"Faltan parámetros requeridos {required_params}"}), 400
 
             # Crear una instancia de la clase para órdenes spot
-            spot_client = KrakenSpotApiAddOrder()
-            spot_client = KrakenAPISpot(user_id)
+            exchange = ExchangeFactory().create_exchange(name="kraken_spot", user_id=user_id)
 
-            response = spot_client.add_order(ordertype, order_direction, volume, symbol, price, order_made_by, money_wanted_to_spend)
+            response = exchange.add_order(ordertype, order_direction, volume, symbol, price, order_made_by, money_wanted_to_spend)
 
             if return_all_trades:
                 all_trades = get_all_trades_from_user(user_id)
@@ -1199,76 +1250,50 @@ def add_order():
             else:
                 final_res["all_trades"] = []
 
-            return jsonify(response[0]), response[1]
+            return jsonify(response[0]), response[1]        
+        elif trading_mode in ["futures", "bingx-spot", "bingx-futures"]:
+            params = {"user_id": current_user.id}
             
-            # Llamar al método add_order pasando los parámetros y las credenciales (API_KEY_KRAKEN y API_SECRET_KRAKEN)
-            result = spot_client.add_order(
-                ordertype=ordertype,
-                order_type=order_direction,
-                volume=volume,
-                symbol=symbol,
-                price=price,
-                api_key="oI9M8AxfCKLCYe0WRZE5QpPQ/GMeiw9QoxWhPTd2sqjGn2QFJqcP90X1",
-                api_secret="PpeGj6z4uaxz2KNgIIdccC8cVQR+brTrLXUAEWsHhTw5TSMMZY5PBNFnEw+RkJaMlp2mHxfZMPYwemiGHs6eig=="
-            )
-            return jsonify(result)
-        
-        elif trading_mode == "futures":
-            kraken = KrakenAPIFutures(user_id=current_user.id)
-            order, err = kraken.add_order(
+            if trading_mode == "futures":
+                params["name"] = "kraken_future"
+            elif trading_mode == "bingx-spot":
+                params["name"] = "bingx"
+            elif trading_mode == "bingx-futures":
+                params["name"] = "bingx"
+                params["trading_mode"] = "swap"
+
+            exchange = ExchangeFactory().create_exchange(**params)
+            # esto es lo que estaba con el kraken_future
+            # order, err = exchange.add_order(
+            #     order_type=data["orderType"],
+            #     order_direction=data["orderDirection"],
+            #     volume=data["amount"],
+            #     symbol=data["symbol"],
+            #     # price=data["entryPrice"], should implement logic to update on db when and order is closed
+            #     order_made_by=data["order_made_by"],
+            #     take_profit=data["takeProfit"],
+            #     stop_loss=data["stopLoss"],
+            # )
+
+            order, _ = exchange.add_order(
+                leverage=data["leverage"],
                 order_type=data["orderType"],
-                order_direction=data["orderDirection"],
                 volume=data["amount"],
                 symbol=data["symbol"],
-                # price=data["entryPrice"], should implement logic to update on db when and order is closed
                 order_made_by=data["order_made_by"],
-                take_profit=data["takeProfit"],
                 stop_loss=data["stopLoss"],
-            )
-
-            if err:
-                return jsonify({"error": err, "success": False}), 400
-            return jsonify({"order": order, "success": True}), 200
-        
-        elif trading_mode == "bingx-spot":
-            bingx = BingxExchange(user_id=current_user.id)
-            order, _ = bingx.add_order(
-              leverage=data["leverage"],
-               order_type=data["orderType"],
-               volume=data["amount"],
-               symbol=data["symbol"],
-               order_made_by=data["order_made_by"],
-               stop_loss=data["stopLoss"],
-               take_profit=data["takeProfit"],
-               order_direction=data["orderDirection"],
+                take_profit=data["takeProfit"],
+                order_direction=data["orderDirection"],
             )
 
             if "error" in order:
                 return jsonify({"error": order["error"], "success": False}), 400
             return jsonify({"order": order, "success": True})
-        
-        elif trading_mode == "bingx-futures":
-            bingx= BingxExchange(user_id=current_user.id, trading_mode="swap")
-            order, err = bingx.create_order(
-               leverage=data["leverage"],
-               order_type=data["orderType"],
-               min_amount=data["amount"],
-               symbol=data["symbol"],
-               order_made_by=data["order_made_by"],
-               stop_loss=data["stopLoss"],
-               take_profit=data["takeProfit"],
-               side=data["orderDirection"],
-            )
-
-            if "error" in order:
-                return jsonify({"error": order["error"], "success": False}), 400
-            return jsonify({"order": order, "success": True})
-
         else:
             return jsonify({"error": f"Modo de trading inválido {trading_mode}"}), 400
 
     except Exception as e:
-        logger.error(f"Error en add_order: {e}")
+        logger.error("Error en add_order: %s", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 

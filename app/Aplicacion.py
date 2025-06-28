@@ -1,11 +1,8 @@
 #app/Aplicacion.py
 
-#app/Aplicacion.py
-
 from flask import Flask
 from flask_cors import CORS
 from flask_login import LoginManager  # Import LoginManager
-from flask_sqlalchemy import SQLAlchemy
 from flask_babel import Babel, _
 import sqlalchemy  # Import Babel and _ function for translations
 
