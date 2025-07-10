@@ -33,15 +33,16 @@ if __name__ == "__main__":
         MODEL_PATHS["ppo_agent"]["dest_dir"]
     )
 
-    from app.iu.routes import routes_bp
+    # Importar y registrar los nuevos blueprints refactorizados
+    from app.iu.routes import register_blueprints
 
-    # # Registrar Blueprints si es necesario
-    app_instance.register_blueprint(routes_bp)
+    # Registrar todos los blueprints
+    register_blueprints(app_instance.app)
+    
     try:
         logger.info("Iniciando la inicialización del servidor...")
 
         app_instance.run()
-
     except Exception as e:
         logger.error(f"Error al iniciar el servidor: {e}", exc_info=True)
         sys.exit(1)

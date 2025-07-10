@@ -36,5 +36,19 @@ class Config:
     BINGX_API_SECRET = os.getenv("BINGX_API_SECRET")
     BINGX_API_KEY_FUTURES = os.getenv("BINGX_API_KEY_FUTURES")
     BINGX_API_SECRET_FUTURES = os.getenv("BINGX_API_SECRET_FUTURES")
+    
+    # Comisiones de trading
+    KRAKEN_SPOT_COMISION_BUY = float(os.getenv("KRAKEN_SPOT_COMISION_BUY", "0.001"))
+    KRAKEN_SPOT_COMISION_SELL = float(os.getenv("KRAKEN_SPOT_COMISION_SELL", "0.001"))
+    KRAKEN_FUTURES_COMISION_BUY = float(os.getenv("KRAKEN_FUTURES_COMISION_BUY", "0.001"))
+    KRAKEN_FUTURES_COMISION_SELL = float(os.getenv("KRAKEN_FUTURES_COMISION_SELL", "0.001"))
+    BINGX_SPOT_COMISION_BUY = float(os.getenv("BINGX_SPOT_COMISION_BUY", "0.001"))
+    BINGX_SPOT_COMISION_SELL = float(os.getenv("BINGX_SPOT_COMISION_SELL", "0.001"))
+    BINGX_FUTURES_COMISION_BUY = float(os.getenv("BINGX_FUTURES_COMISION_BUY", "0.001"))
+    BINGX_FUTURES_COMISION_SELL = float(os.getenv("BINGX_FUTURES_COMISION_SELL", "0.001"))
+    
+    ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@admin.com")
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin")
+    ADMIN_NAME = os.getenv("ADMIN_NAME", "Admin")
 
 config = Config()

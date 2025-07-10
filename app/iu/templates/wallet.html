@@ -1,0 +1,574 @@
+{% extends "base.html" %} {% block title %}Wallet{% endblock %} {% block content%}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="container-fluid">
+	<h2 class="mt-4">Hello {{name}}, this is your wallet.</h2>
+	<p>Here is a summary of your wallet</p>
+
+	<!-- Fund Wallet -->
+	<div class="row mt-4">
+		<div class="col-md-12">
+			<div class="card">
+				<div class="card-body">
+					<h5 class="card-title" id="title_wallet_balance">Wallet Balance General</h5>
+					
+					<div class="d-flex align-items-center">
+						<!-- Individual Balance Display -->
+						<div id="individualBalance">
+							{% if balance %}
+								<h3 id="balanceAmount" class="mt-2">{{ "%.6f"|format(balance_general[0].amount) }} </h3>
+							{% else %}
+								<h3>0.00</h3>
+							{% endif %}
+						</div>
+
+						<!-- Currency Selector and Toggle Button -->
+						<select class="form-select" id="currencySelect" style="width: fit-content; font-size: 1.5rem; font-weight: bold; border: none;">
+							{% if balance_general %}
+								{% for item in balance_general %}
+									<option value="{{ item.currency }}">{{ item.currency }}</option>
+								{% endfor %}
+							{% else %}
+								<option value="">USDT</option>
+							{% endif %}
+						</select>
+					</div>
+
+					<!-- All Balances Table (Hidden by default) -->
+					<div id="allBalancesTable" style="display: none;">
+						<div class="mb-3">
+							<label for="exchangeFilter" class="form-label">Filter by Exchange:</label>
+							<select class="form-select" id="exchangeFilter" style="width: auto;">
+								<option value="">All Exchanges</option>
+								<option value="general">General Wallet</option>
+								<option value="kraken_spot">Kraken Spot</option>
+								<option value="kraken_futures">Kraken Futures</option>
+								<option value="bingx_spot">BingX Spot</option>
+								<option value="bingx_futures">BingX Futures</option>
+							</select>
+						</div>
+						<table class="table table-striped">
+							<thead>
+								<tr>
+									<th>Exchange</th>
+									<th>Currency</th>
+									<th>Amount</th>
+								</tr>
+							</thead>
+							<tbody id="allBalancesTableBody">
+								{% if balance %}
+									{% for item in balance|sort(attribute='currency') %}
+										<tr data-exchange="{{ item.exchange }}">
+											<td>
+												<span class="badge 
+													{% if item.exchange == 'general' %}bg-secondary
+													{% elif item.exchange == 'kraken_spot' %}bg-primary
+													{% elif item.exchange == 'kraken_futures' %}bg-info
+													{% elif item.exchange == 'bingx_spot' %}bg-success
+													{% elif item.exchange == 'bingx_futures' %}bg-warning
+													{% else %}bg-secondary{% endif %}">
+													{% if item.exchange == 'general' %}General Wallet
+													{% elif item.exchange == 'kraken_spot' %}Kraken Spot
+													{% elif item.exchange == 'kraken_futures' %}Kraken Futures
+													{% elif item.exchange == 'bingx_spot' %}BingX Spot
+													{% elif item.exchange == 'bingx_futures' %}BingX Futures
+													{% else %}{{ item.exchange }}{% endif %}
+												</span>
+											</td>
+											<td>{{ item.currency }}</td>
+											<td>{{ "%.6f"|format(item.amount) }}</td>
+										</tr>
+									{% endfor %}
+								{% else %}
+									<tr>
+										<td colspan="3">No balances found</td>
+									</tr>
+								{% endif %}
+							</tbody>
+						</table>
+					</div>
+
+					<div class="col-md-6 d-flex align-items-end mt-4">
+						<button type="button" class="btn btn-secondary" id="toggleAllBalances" style="margin-right: 1rem;">
+							Show All Balances
+						</button>
+						
+						<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal" id="fund_wallet_button" {{ "disabled" if pending_balance > 0 else "" }}>
+							Fund wallet
+						</button>
+					</div>
+						
+					<p>Console Log: Wallet Balance and Fund Wallet</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="row mt-4">
+		<div class="col-md-3">
+			<div class="card bg-primary text-white mb-3">
+				<div class="card-body">
+					<h5 class="card-title">Capital Inicial</h5>
+					<h3>{{ "%.2f"|format(initial_capital) }} USDT</h3>
+					<p>Último fondeo de la cuenta</p>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-3">
+			<div class="card bg-success text-white mb-3">
+				<div class="card-body">
+					<h5 class="card-title">Ganancias Totales</h5>
+					<h3>{{ "%.2f"|format(performance.total_gains) }} USDT</h3>
+					<p>Ganancias acumuladas</p>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-3">
+			<div class="card bg-danger text-white mb-3">
+				<div class="card-body">
+					<h5 class="card-title">Pérdidas Totales</h5>
+					<h3>{{ "%.2f"|format(performance.total_losses) }} USDT</h3>
+					<p>Pérdidas acumuladas</p>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-3">
+			<div class="card {% if performance.net_performance >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white mb-3">
+				<div class="card-body">
+					<h5 class="card-title">Rendimiento Neto</h5>
+					<h3>{{ "%.2f"|format(performance.net_performance) }} USDT</h3>
+					<p>{{ "%.2f"|format(performance.performance_percentage) }}%</p>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-3">
+			<div class="card bg-primary text-white mb-3">
+				<div class="card-body">
+					<h5 class="card-title">Saldo Pendiente</h5>
+					<h3>{{ "%.2f"|format(pending_balance) }} USDT</h3>
+					<p>Transacciones sin verificar</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="row mt-4">
+		<div class="col-md-8">
+			<div class="card mb-3">
+				<div class="card-body">
+					<h5 class="card-title">Earnings vs Losses</h5>
+					<canvas id="earningsChart" width="400" height="200"></canvas>
+					<p>Console Log: Earnings vs Losses Chart</p>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-4">
+			<div class="card mb-3">
+				<div class="card-body">
+					<h5 class="card-title">Recent Transactions</h5>
+					<ul class="list-group list-group-flush">
+						<li class="list-group-item d-flex justify-content-between align-items-center">
+							<div>
+								<i class="fas fa-arrow-up text-success"></i>
+								28 Nov
+							</div>
+							<span class="text-success">+12,098.00</span>
+							<a href="#" onclick="console.log('See Blockchain 1');">See Blockchain</a>
+						</li>
+						<li class="list-group-item d-flex justify-content-between align-items-center">
+							<div>
+								<i class="fas fa-arrow-down text-danger"></i>
+								27 Nov
+							</div>
+							<span class="text-danger">-9,066.00</span>
+							<a href="#" onclick="console.log('See Blockchain 2');">See Blockchain</a>
+						</li>
+						<li class="list-group-item d-flex justify-content-between align-items-center">
+							<div>
+								<i class="fas fa-arrow-up text-success"></i>
+								26 Nov
+							</div>
+							<span class="text-success">+12,098.00</span>
+							<a href="#" onclick="console.log('See Blockchain 3');">See Blockchain</a>
+						</li>
+						<li class="list-group-item d-flex justify-content-between align-items-center">
+							<div>
+								<i class="fas fa-arrow-up text-success"></i>
+								25 Nov
+							</div>
+							<span class="text-success">+12,098.00</span>
+							<a href="#" onclick="console.log('See Blockchain 4');">See Blockchain</a>
+						</li>
+						<li class="list-group-item d-flex justify-content-between align-items-center">
+							<div>
+								<i class="fas fa-arrow-down text-danger"></i>
+								24 Nov
+							</div>
+							<span class="text-danger">-9,066.00</span>
+							<a href="#" onclick="console.log('See Blockchain 5');">See Blockchain</a>
+						</li>
+						<li class="list-group-item d-flex justify-content-between align-items-center">
+							<div>
+								<i class="fas fa-arrow-down text-danger"></i>
+								23 Nov
+							</div>
+							<span class="text-danger">-9,066.00</span>
+							<a href="#" onclick="console.log('See Blockchain 6');">See Blockchain</a>
+						</li>
+					</ul>
+					<button class="btn btn-primary mt-3" onclick="console.log('Go To Blockchain');">
+						Go To Blockchain
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+</div>
+
+<!-- Fund Modal -->
+<div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="exampleModalLabel">Fund Your Wallet</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<p>Wallet Address: 0xAbCdEfGhIjKlMnOpQrStUvWxYz</p>
+				<div class="form-group">
+					<label for="transactionAmount">Amount:</label>
+					<input type="number" class="form-control" id="transactionAmount" />
+					<label for="transactionId">Transaction ID:</label>
+					<input type="text" class="form-control" id="transactionId" placeholder="Enter Transaction ID" />
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+					Close
+				</button>
+				<button type="button" class="btn btn-primary" id="submitTransaction">
+					Yes, i do page
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	// Balance data from server
+	const balanceData = {{ balance|tojson|safe }};
+	let showingAllBalances = false;
+
+	// Function to update individual balance display
+	function updateIndividualBalance(currency) {
+		const balanceItem = balanceData.find(item => item.currency === currency && item.exchange === "general");
+		const balanceElement = document.getElementById('balanceAmount');
+		
+		if (balanceItem) {
+			balanceElement.textContent = `${balanceItem.amount.toFixed(5)}`;
+		} else {
+			balanceElement.textContent = '0.00';
+		}
+	}
+
+	// Function to toggle between individual and all balances view
+	function toggleAllBalances() {
+		const individualBalance = document.getElementById('individualBalance');
+		const allBalancesTable = document.getElementById('allBalancesTable');
+		const toggleButton = document.getElementById('toggleAllBalances');
+		const currencySelect = document.getElementById('currencySelect');
+		const exchangeFilter = document.getElementById('exchangeFilter');
+		const title = document.getElementById('title_wallet_balance');
+
+		if (showingAllBalances) {
+			// Show individual balance
+			individualBalance.style.display = 'block';
+			allBalancesTable.style.display = 'none';
+			toggleButton.textContent = 'Show All Balances';
+			title.textContent = 'Wallet Balance General';
+			currencySelect.style.display = 'block';
+			showingAllBalances = false;
+		} else {
+			// Show all balances table
+			individualBalance.style.display = 'none';
+			allBalancesTable.style.display = 'block';
+			toggleButton.textContent = 'Show Individual Balance';
+			title.textContent = 'Wallet Balance All';
+			currencySelect.style.display = 'none';
+			showingAllBalances = true;
+		}
+	}
+
+	// Function to filter balances by exchange
+	function filterBalancesByExchange() {
+		const exchangeFilter = document.getElementById('exchangeFilter');
+		const selectedExchange = exchangeFilter.value;
+		const tableBody = document.getElementById('allBalancesTableBody');
+		const rows = tableBody.querySelectorAll('tr');
+
+		rows.forEach(row => {
+			const exchange = row.getAttribute('data-exchange');
+			if (!selectedExchange || exchange === selectedExchange) {
+				row.style.display = '';
+			} else {
+				row.style.display = 'none';
+			}
+		});
+	}
+
+	// Event listeners
+	document.addEventListener("DOMContentLoaded", function () {
+		// Currency selector change event
+		const currencySelect = document.getElementById('currencySelect');
+		currencySelect.addEventListener('change', function() {
+			updateIndividualBalance(this.value);
+		});
+
+		// Toggle button click event
+		const toggleButton = document.getElementById('toggleAllBalances');
+		toggleButton.addEventListener('click', toggleAllBalances);
+
+		// Exchange filter change event
+		const exchangeFilter = document.getElementById('exchangeFilter');
+		exchangeFilter.addEventListener('change', filterBalancesByExchange);
+
+		// Initialize with first currency
+		if (balanceData && balanceData.length > 0) {
+			updateIndividualBalance(balanceData[0].currency);
+		}
+
+		// Load funding transactions by exchange
+		loadTransactionsByExchange();
+
+		// Chart.js code - fetch data from API
+		const ctx = document.getElementById("earningsChart");
+		if (ctx) {
+			// Fetch chart data from the API
+			fetch('/api/wallet/chart-data')
+				.then(response => response.json())
+				.then(data => {
+					if (data.success) {
+						new Chart(ctx.getContext("2d"), {
+							type: 'line',
+							data: data.data,
+							options: {
+								responsive: true,
+								scales: {
+									y: {
+										beginAtZero: true,
+										ticks: {
+											callback: function(value) {
+												return '$' + value.toFixed(2);
+											}
+										}
+									}
+								},
+								plugins: {
+									legend: {
+										display: true,
+										position: 'top'
+									}
+								}
+							}
+						});
+					} else {
+						console.error('Error loading chart data:', data.error);
+						// Fallback to static data if API fails
+						new Chart(ctx.getContext("2d"), {
+							type: 'line',
+							data: {
+								labels: ['2025-01-01', '2025-01-02', '2025-01-03', '2025-01-04', '2025-01-05', '2025-01-06'],
+								datasets: [{
+									label: 'Earnings vs Losses',
+									data: [12, 19, 3, 5, 2, 3],
+									borderWidth: 5,
+									tension: 0.1
+								}]
+							},
+							options: {
+								scales: {
+									y: {
+										beginAtZero: true
+									}
+								}
+							}
+						});
+					}
+				})
+				.catch(error => {
+					console.error('Error fetching chart data:', error);
+					// Fallback to static data if fetch fails
+					new Chart(ctx.getContext("2d"), {
+						type: 'line',
+						data: {
+							labels: ['2025-01-01', '2025-01-02', '2025-01-03', '2025-01-04', '2025-01-05', '2025-01-06'],
+							datasets: [{
+								label: 'Earnings vs Losses',
+								data: [12, 19, 3, 5, 2, 3],
+								borderWidth: 5,
+								tension: 0.1
+							}]
+						},
+						options: {
+							scales: {
+								y: {
+									beginAtZero: true
+								}
+							}
+						}
+					});
+				});
+		}
+	});
+
+	// Function to load and display transactions by exchange
+	function loadTransactionsByExchange() {
+		const container = document.getElementById('transactionsByExchange');
+		
+		fetch('/get_found_wallets_by_exchange')
+			.then(response => response.json())
+			.then(data => {
+				if (data.success) {
+					displayTransactionsByExchange(data.transactions_by_exchange);
+				} else {
+					container.innerHTML = '<div class="alert alert-danger">Error loading transactions</div>';
+				}
+			})
+			.catch(error => {
+				console.error('Error fetching transactions:', error);
+				container.innerHTML = '<div class="alert alert-danger">Error loading transactions</div>';
+			});
+	}
+
+	// Function to display transactions grouped by exchange
+	function displayTransactionsByExchange(transactionsByExchange) {
+		const container = document.getElementById('transactionsByExchange');
+		
+		if (!transactionsByExchange || Object.keys(transactionsByExchange).length === 0) {
+			container.innerHTML = '<div class="alert alert-info">No funding transactions found</div>';
+			return;
+		}
+
+		let html = '';
+		
+		// Exchange display names
+		const exchangeNames = {
+			'general': 'General Wallet',
+			'kraken_spot': 'Kraken Spot',
+			'kraken_futures': 'Kraken Futures',
+			'bingx_spot': 'BingX Spot',
+			'bingx_futures': 'BingX Futures'
+		};
+
+		// Exchange badge colors
+		const exchangeColors = {
+			'general': 'bg-secondary',
+			'kraken_spot': 'bg-primary',
+			'kraken_futures': 'bg-info',
+			'bingx_spot': 'bg-success',
+			'bingx_futures': 'bg-warning'
+		};
+
+		for (const [exchange, transactions] of Object.entries(transactionsByExchange)) {
+			const exchangeName = exchangeNames[exchange] || exchange;
+			const exchangeColor = exchangeColors[exchange] || 'bg-secondary';
+			
+			html += `
+				<div class="mb-4">
+					<h6 class="mb-3">
+						<span class="badge ${exchangeColor} me-2">${exchangeName}</span>
+						<span class="text-muted">(${transactions.length} transactions)</span>
+					</h6>
+					<div class="table-responsive">
+						<table class="table table-sm table-striped">
+							<thead>
+								<tr>
+									<th>Date</th>
+									<th>Type</th>
+									<th>Amount</th>
+									<th>Currency</th>
+									<th>Transaction ID</th>
+									<th>Status</th>
+								</tr>
+							</thead>
+							<tbody>
+			`;
+
+			transactions.forEach(transaction => {
+				const date = new Date(transaction.time).toLocaleDateString();
+				const typeClass = transaction.transaction_type === 'deposit' ? 'text-success' : 'text-danger';
+				const typeIcon = transaction.transaction_type === 'deposit' ? 'fa-arrow-up' : 'fa-arrow-down';
+				const amountPrefix = transaction.transaction_type === 'deposit' ? '+' : '-';
+				const statusClass = transaction.verification ? 'text-success' : 'text-warning';
+				const statusText = transaction.verification ? 'Verified' : 'Pending';
+
+				html += `
+					<tr>
+						<td>${date}</td>
+						<td><i class="fas ${typeIcon} ${typeClass}"></i> ${transaction.transaction_type}</td>
+						<td class="${typeClass}">${amountPrefix}${parseFloat(transaction.amount).toFixed(6)}</td>
+						<td>${transaction.currency}</td>
+						<td><small class="text-muted">${transaction.ref}</small></td>
+						<td><span class="badge ${statusClass}">${statusText}</span></td>
+					</tr>
+				`;
+			});
+
+			html += `
+							</tbody>
+						</table>
+					</div>
+				</div>
+			`;
+		}
+
+		container.innerHTML = html;
+	}
+
+	// Load transactions by exchange when page loads
+	loadTransactionsByExchange();
+
+	const submitTransaction = () => {
+		const amount = document.getElementById('transactionAmount').value;
+		const transactionId = document.getElementById('transactionId').value;
+
+		if (!amount || !transactionId) {
+			alert('Please fill in both Amount and Transaction ID fields');
+			return;
+		}
+
+		const formData = new FormData();
+		formData.append('amount', amount);
+		formData.append('ref', transactionId);
+
+		fetch('/add_found_wallet', {
+			method: 'POST',
+			body: formData
+		})
+		.then(response => response.json())
+		.then(data => {
+			if (data.success) {
+				alert('Transaction submitted successfully!');
+				// Close modal
+				const modal = bootstrap.Modal.getInstance(document.getElementById('exampleModal'));
+				if (modal) {
+					modal.hide();
+				}
+				// Reload transactions
+				loadTransactionsByExchange();
+
+				document.getElementById('fund_wallet_button').disabled = true;
+			} else {
+				alert('Error: ' + (data.error || 'Failed to submit transaction'));
+			}
+		})
+		.catch(error => {
+			console.error('Error:', error);
+			alert('Error submitting transaction. Please try again.');
+		});
+	}
+
+	document.getElementById('submitTransaction').addEventListener('click', submitTransaction);
+</script>
+{% endblock %}

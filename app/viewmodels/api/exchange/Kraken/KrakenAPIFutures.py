@@ -95,6 +95,31 @@ class KrakenFuturesExchange(KrakenExchange):
             if stop_loss:
                 params["stopLossPrice"] = float(stop_loss)
 
+            # --- Lógica para cerrar posición opuesta ---
+            try:
+                open_positions = self.exchange.fetch_positions()
+                for pos in open_positions:
+                    pos_symbol = pos.get('symbol')
+                    pos_side = pos.get('side')  # 'long' o 'short'
+                    contracts = pos.get('contracts')
+                    contracts_float = 0.0
+                    if contracts is not None:
+                        try:
+                            contracts_float = float(contracts)
+                        except (TypeError, ValueError):
+                            contracts_float = 0.0
+                    if pos_symbol == symbol and abs(contracts_float) > 0:
+                        if (order_direction == "buy" and pos_side == "short") or (order_direction == "sell" and pos_side == "long"):
+                            params["reduce_only"] = True
+                            params["oflags"] = "fciq"
+                            logger.info(f"[KrakenFutures] Se detectó posición opuesta abierta en {symbol}. Se usará reduce_only=True y oflags='fciq' para cerrar la posición.")
+                            if volume > abs(contracts_float):
+                                logger.info(f"[KrakenFutures] Ajustando volumen de cierre de {volume} a {abs(contracts_float)} para igualar la posición abierta.")
+                                volume = abs(contracts_float)
+                        break
+            except Exception as e:
+                logger.error(f"[KrakenFutures] Error al consultar posiciones abiertas: {e}")
+
             if order_direction not in ["buy", "sell"]:
                 raise ValueError("Invalid order direction")
             else:

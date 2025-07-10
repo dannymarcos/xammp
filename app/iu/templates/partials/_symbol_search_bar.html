@@ -29,7 +29,7 @@
                 throw new Error(data.error);
             }
             return data.cryptos;
- }
+        }
 
         function renderSymbols(symbolsToRender) {
             symbolList.innerHTML = ''; // Clear existing symbols
@@ -53,6 +53,9 @@
                         for (let i = 0; i < symbolElements.length; i++) {
                             symbolElements[i].textContent = symbolObj.symbol;
                         }
+                        changeTradingViewSymbol(symbolObj.symbol.split(":")[0].replace("/", ""), exchange);
+                        window.TradingOrderMakerManager["bingx-spot"].refresh();
+                        window.TradingOrderMakerManager["bingx-futures"].refresh();
                     }
                 });
                 symbolList.appendChild(listItem);

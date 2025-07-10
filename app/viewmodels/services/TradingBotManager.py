@@ -16,6 +16,7 @@ class TradingBotManager:
     _bots = {}  # Stores active bots by user_id
     _legacy_bots = {}  # Stores legacy bots for testing purposes
     exchange: ExchangeFactory = None
+    type_wallet = None
 
     @classmethod
     def start_bot(
@@ -24,6 +25,7 @@ class TradingBotManager:
         exchange: ExchangeFactory,
         config,
         bot_id="basic-bot",
+        type_wallet: str = ""
     ):
         """
         Start a trading bot for the specified user using the TradingBot implementation
@@ -51,6 +53,7 @@ class TradingBotManager:
                 return False
 
             cls.exchange = exchange
+            cls.type_wallet = type_wallet
 
             # Create and start the TradingBot
             try:
@@ -60,14 +63,16 @@ class TradingBotManager:
                     bot = StrategyTradingBot(
                         user_id,
                         cls.exchange,
-                        config
+                        config,
+                        cls.type_wallet
                     )
                 else:
                     # "basic-bot" or others
                     bot = TradingBot(
                         user_id,
                         cls.exchange,
-                        config
+                        config,
+                        cls.type_wallet
                     )
 
                 logger.debug("Starting TradingBot for user %s", user_id)

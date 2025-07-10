@@ -5,6 +5,7 @@ import traceback
 from datetime import datetime
 
 import ccxt
+from ccxt.bingx import Position
 from app.config import config
 
 from app.viewmodels.api.exchange.FatherExchange import Exchange
@@ -29,10 +30,18 @@ class BingxExchange(Exchange):
         """
         super().__init__(user_id, trading_mode)
 
+        # Seleccionar las credenciales apropiadas según el modo de trading
+        if trading_mode == "swap":
+            api_key = config.BINGX_API_KEY_FUTURES or ""
+            api_secret = config.BINGX_API_SECRET_FUTURES or ""
+        else:  # spot
+            api_key = config.BINGX_API_KEY or ""
+            api_secret = config.BINGX_API_SECRET or ""
+
         self.exchange = ccxt.bingx(
             {
-                "apiKey": config.BINGX_API_KEY,
-                "secret": config.BINGX_API_SECRET,
+                "apiKey": api_key,
+                "secret": api_secret,
                 "options": {
                     "defaultType": trading_mode,
                 },
@@ -101,16 +110,39 @@ class BingxExchange(Exchange):
         if leverage and leverage > 0:
             params["leverage"] = leverage
 
+        params["positionSide"] = "LONG" if order_direction == "buy" else "SHORT"
+        position_cancel = False
+
+        # --- Lógica para cerrar posición opuesta en futuros (swap) ---
+        if self.trading_mode == "swap":
+            try:
+                open_positions = self.exchange.fetch_positions()
+
+                for pos in open_positions:
+                    pos_symbol = pos.get('symbol')
+                    pos_side = pos.get('side')  # 'long' o 'short'
+                    contracts = pos.get('contracts')
+
+                    contracts_float = 0.0
+                    if contracts is not None:
+                        contracts_float = float(contracts)
+                    else:
+                        raise Exception(f"Error al obtener el número de contratos para {symbol}")
+
+                    if pos_symbol == symbol and abs(contracts_float) > 0:
+                        if (order_direction == "buy" and pos_side == "short") or (order_direction == "sell" and pos_side == "long"):
+                            print(f"[Bingx] Se detectó posición opuesta abierta en {symbol}. Se cancelara la orden abierta.")
+                            params["reduce_only"] = True
+                            params["positionSide"] = pos['side'].upper()
+                            position_cancel = True
+                        break
+            except Exception as e:
+                print(f"[Bingx] Error al consultar posiciones abiertas: {e}")
+
         if order_direction == "buy":
-            params["positionSide"] = "LONG"
             order = self.exchange.create_market_buy_order(symbol, volume, params=params)
         else:
-            params["positionSide"] = "SHORT"
-            order = self.exchange.create_market_sell_order(
-                symbol,
-                volume,
-                params=params,
-            )
+            order = self.exchange.create_market_sell_order(symbol, volume, params=params)
 
         # Save the order to the database
         order_to_save = {
@@ -126,6 +158,7 @@ class BingxExchange(Exchange):
             "user_id": self.user_id,
             "stop_loss": order.get("stopLossPrice") or 0,
             "take_profit": order.get("takeProfitPrice") or 0,
+            "status": ("close" if position_cancel else "open"),
             "leverage": leverage,
             "exchange": (
                 "bingx-spot" if self.trading_mode == "spot" else "bingx-futures"
@@ -237,20 +270,87 @@ class BingxExchange(Exchange):
             balance_list = []
 
             if self.trading_mode == "swap":
+                # Para futures/swap, usar el balance total
                 for currency, amount in balance.get("total", {}).items():
                     balance_list.append(
                         {"currency": currency.upper(), "amount": float(amount)}
                     )
                 return balance_list
-
-            for b in balance["info"]["data"]["balances"]:
-                balance_list.append(
-                    {
-                        "currency": b["asset"],
-                        "amount": float(b["free"]),  # Convert string to float
-                    }
-                )
-            return balance_list
+            else:
+                # Para spot, usar el balance libre
+                for currency, amount in balance.get("free", {}).items():
+                    try:
+                        amount_float = float(amount) if amount is not None else 0.0
+                        if amount_float > 0:  # Solo incluir monedas con balance > 0
+                            balance_list.append(
+                                {"currency": currency.upper(), "amount": amount_float}
+                            )
+                    except (ValueError, TypeError):
+                        continue  # Skip invalid amounts
+                return balance_list
         except Exception as e:
             traceback.print_exc()
             return {"error": str(e)}
+
+    def close_specific_bingx_future_positions(self, pos: Position):
+        pos_symbol = pos['symbol']
+        contracts = float(pos['contracts'])
+
+        # 2. Determinar dirección para cerrar
+        side_to_close = 'sell' if pos['side'] == 'long' else 'buy'
+        
+        try:
+            # 3. Crear orden de mercado para cerrar
+            order = self.exchange.create_order(
+                symbol=pos_symbol,
+                type='market',
+                side=side_to_close,
+                amount=contracts,
+                params={
+                    "reduce_only": True,  # Solo reduce posición existente
+                    "positionSide": pos['side'].upper()  # Especificar LONG/SHORT
+                }
+            )
+            print(f"✅ Cerrada posición {pos['side']} de {contracts} contratos en {pos_symbol}")
+            print(f"Detalles orden: {order['id']} @ {order['price']}")
+            
+        except Exception as e:
+            print(f"❌ Error cerrando {pos_symbol}: {e}")
+
+    def get_bulk_prices(self, currencies):
+        """Obtiene precios para múltiples monedas con manejo de lotes"""
+        if not currencies:
+            return {}
+        
+        prices = {}
+        batch_size = 20  # Ajustar según límites del exchange
+        remaining = set(currencies)
+        
+        # Procesar en lotes
+        for i in range(0, len(currencies), batch_size):
+            batch = currencies[i:i+batch_size]
+            symbols = [f"{c}/USDT" for c in batch]
+            
+            try:
+                tickers = self.exchange.fetch_tickers(symbols)
+                for symbol, ticker in tickers.items():
+                    currency = symbol.split('/')[0]
+                    last_price = ticker.get('last', ticker.get('close'))
+                    if last_price is not None:
+                        prices[currency] = float(last_price)
+                        remaining.discard(currency)
+            except Exception as e:
+                # Fallback para este lote
+                remaining.update(batch)
+        
+        # Manejar monedas restantes individualmente
+        for currency in remaining:
+            try:
+                # Intentar obtener precio directamente
+                price = self.get_symbol_price(f"{clean_currency}/USDT")
+                if price:
+                    prices[currency] = price
+            except Exception:
+                continue
+        
+        return prices

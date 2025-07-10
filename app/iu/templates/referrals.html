@@ -1,0 +1,165 @@
+{% extends "base.html" %} {% block title %}Referral{% endblock %} {% block
+content %}
+
+<div class="container mt-5">
+	<div class="row">
+		<div class="col-md-8">
+			<div class="card shadow-sm">
+				<div class="card-body">
+					<h5 class="card-title">Earn with Aegis AI</h5>
+					<p class="card-text">
+						Invite your friends to Aegis AI! When a referred user cashes out,
+						you'll receive 5% of their earnings as a referral bonus.
+					</p>
+
+					<div class="d-flex justify-content-around mt-4">
+						<div class="text-center">
+							<i class="fas fa-envelope fa-3x text-primary"></i>
+							<p>Send Invitation</p>
+							<p class="small text-muted">
+								Send your referral link to friends and tell them how useful
+								Horizon is!
+							</p>
+						</div>
+						<div class="text-center">
+							<i class="fas fa-user-plus fa-3x text-success"></i>
+							<p>Registration</p>
+							<p class="small text-muted">
+								Let your friends register to our services using your personal
+								referral code!
+							</p>
+						</div>
+						<div class="text-center">
+							<i class="fas fa-check-circle fa-3x text-info"></i>
+							<p>Use Horizon for Free!</p>
+							<p class="small text-muted">
+								You and your friends get 2 premium Aegis AI features for free!
+							</p>
+						</div>
+					</div>
+
+					<div class="row mt-4">
+						<div class="col-sm-4 mb-2">
+							<div class="card bg-light text-center">
+								<div class="card-body">
+									<h6 class="card-title">Your Earnings</h6>
+									<h3>$127,589</h3>
+								</div>
+							</div>
+						</div>
+						<div class="col-sm-4 mb-2">
+							<div class="card bg-light text-center">
+								<div class="card-body">
+									<h6 class="card-title">Porcentaje de ganancias</h6>
+									<h3>%20</h3>
+								</div>
+							</div>
+						</div>
+						<div class="col-sm-4 mb-2">
+							<div class="card bg-light text-center">
+								<div class="card-body">
+									<h6 class="card-title">Users Invited</h6>
+									<h3>1,849</h3>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<h6 class="mt-4">Referral Friends</h6>
+					<div class="table-responsive">
+						<table class="table table-borderless">
+							<thead>
+								<tr class="text-muted">
+									<th>USER NAME</th>
+									<th>EARNINGS</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>Vlad Mihalache</td>
+									<td>$90,732</td>
+								</tr>
+								<tr>
+									<td>Fredy Andrei</td>
+									<td>$79,943</td>
+								</tr>
+								<tr>
+									<td>Anonymous User</td>
+									<td>$72,365</td>
+								</tr>
+								<tr>
+									<td>Marcus Aurelius</td>
+									<td>$53,928</td>
+								</tr>
+								<tr>
+									<td>Lorentz Michael</td>
+									<td>$47,573</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-md-4">
+			<div class="card shadow-sm">
+				<div class="card-body">
+					<h5 class="card-title">Invite your friends!</h5>
+					<div class="input-group mb-3">
+						<input
+							type="email"
+							class="form-control"
+							placeholder="Email addresses..."
+							aria-label="Email addresses"
+							aria-describedby="button-addon2"
+						/>
+						<button class="btn btn-primary" type="button" id="button-addon2">
+							<i class="fas fa-paper-plane"></i>
+						</button>
+					</div>
+
+					<h5 class="card-title mt-3">Share the referral link</h5>
+					<div class="input-group mb-3">
+						<input
+							type="text"
+							class="form-control"
+							value="aegis-ai.com/?ref=947385"
+							aria-label="Referral link"
+							aria-describedby="button-addon3"
+						/>
+						<button
+							class="btn btn-outline-secondary"
+							type="button"
+							id="button-addon3"
+						>
+							Copy link
+						</button>
+						<a href="#" class="btn btn-primary"
+							><i class="fab fa-facebook-f"></i
+						></a>
+						<a href="#" class="btn btn-info"><i class="fab fa-twitter"></i></a>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	// Static data for now, logic in JavaScript for future functionality
+	document.addEventListener("DOMContentLoaded", () => {
+		const copyLinkButton = document.getElementById("button-addon3");
+		copyLinkButton.addEventListener("click", () => {
+			console.log("Copy link button clicked");
+			// Future functionality: Copy the referral link to the clipboard
+		});
+
+		const sendInvitationButton = document.getElementById("button-addon2");
+		sendInvitationButton.addEventListener("click", () => {
+			console.log("Send invitation button clicked");
+			// Future functionality: Send invitation to the entered email addresses
+		});
+	});
+</script>
+{% endblock %}

@@ -1,9 +1,6 @@
 
 import TvWidget from "./js/TvWidget.js";
 import get_cryptos from "./js/get_cryptos.js";
-import InversionTron from "./js/InversionTron.js";
-import ReferralLink from "./js/ReferralLink.js";
-import method_trading from "./js/MethodTrading.js";
 
 import get_method from "./js/get_method.js";
 import get_symbol from "./js/get_symbol.js";
@@ -17,8 +14,6 @@ const ls = localStorage;
 
 d.addEventListener("DOMContentLoaded", async (e)=>{
     window.tvWidget = new TvWidget();
-    const inversion = new InversionTron();
-    const link_ref = new ReferralLink();
     window.get_historical_data = get_historical_data;
     
     let method = ls.getItem('method');
@@ -64,11 +59,6 @@ d.addEventListener("DOMContentLoaded", async (e)=>{
         
         // console.log(`El símbolo actual guardado en localStorage es: ${localStorage.getItem("symbol")}`);
     });
-    
-    //Inversion en la cuenta de tron
-    inversion.showInvestmentWarning('investment-btn');
-    //Generar link de referidos
-    link_ref.detectarClick('generate-referral-btn')
     
     //Funcion que permite obtener una lista detallada de los pares de divisas disponibles en la API de kraken, dependiendo del metodo
     // de trading que este almacenado en la variable method

@@ -1,0 +1,415 @@
+{% extends "base.html" %}
+{% block title %}Admin panel{% endblock %}
+
+{% block content%}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin/styles.css') }}">
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-2xl font-bold mb-4">Admin Panel - Transaction Management</h1>
+
+    <!-- Detailed Balance Table -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header" style="cursor: pointer;" id="toggleExchangeDetails">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">
+                            <i id="exchangeToggleIcon" class="fas fa-chevron-down ml-2"></i>
+                            Detailed Exchange Balances 
+                        </h5>
+                        <button id="refreshBalancesBtn" class="btn btn-sm btn-outline-primary ml-2" onclick="event.stopPropagation(); loadExchangeBalances();">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body" id="exchangeDetails" style="display: none;">
+                    <div id="loadingBalances" class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading exchange balances...</p>
+                    </div>
+                    <div id="exchangeBalancesContainer" class="row" >
+                        <!-- Exchange balances will be loaded here dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4" style="margin-bottom: 10rem;">
+        <!-- Search Bar -->
+        <input 
+            type="text" 
+            id="searchInput" 
+            placeholder="Search for user email, amount, crypto, ref, red..." 
+            class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            style="width: 100%;"
+        >
+        <div>
+            <button id="filterStatus" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" style="width: 10rem;">Verified</button>
+        </div>
+
+        <div class="mt-2 text-sm text-gray-500">
+            <span id="searchResults">Mostrando todas las transacciones</span>
+        </div>
+        
+        {% if transations %}
+        <div class="overflow-x-auto">
+            <table class="transaction-table">
+                <thead>
+                    <tr>
+                        <th>User Email</th>
+                        <th>Amount</th>
+                        <th>Symbol</th>
+                        <th>Red</th>
+                        <th>Reference</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="transactionTableBody">
+                    {% for transaction in transations %}
+                    <tr data-transaction-id="{{ transaction.id }}" class="{{ 'bg-gray' if loop.index0 % 2 == 1 else '' }}" data-search-text="{{ transaction.user_email|lower }} {{ "%.2f"|format(transaction.amount) }} {{ transaction.currency|lower }} {{ transaction.red|lower }} {{ transaction.ref|lower }} {{ 'verificado' if transaction.verification else 'pendiente' }} {{ transaction.time.strftime('%Y-%m-%d %H:%M:%S') if transaction.time else 'N/A' }}">
+                        <td>{{ transaction.user_email }}</td>
+                        <td>{{ "%.2f"|format(transaction.amount) }}</td>
+                        <td>{{ transaction.currency }}</td>
+                        <td>{{ transaction.red }}</td>
+                        <td>{{ transaction.ref }}</td>
+                        <td>{{ transaction.time.strftime('%Y-%m-%d %H:%M:%S') if transaction.time else 'N/A' }}</td>
+                        <td>
+                            <span class="status-badge {% if transaction.verification %}status-verified{% else %}status-pending{% endif %}">
+                                {% if transaction.verification %}Verified{% else %}Pending{% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            {% if not transaction.verification %}
+                            <button class="verify-btn" onclick="showVerificationModal('{{ transaction.id }}', '{{ transaction.user_email }}', '{{ transaction.amount }}', '{{ transaction.currency }}')">
+                                Verify
+                            </button>
+                            {% else %}
+                            <span class="text-green-600 text-sm">✓ Verified</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% else %}
+            <div class="text-center py-8">
+                <p class="text-gray-500">No transactions found.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Verification Modal -->
+        <div id="verificationModal" class="modal">
+            <div class="modal-content">
+                <h3 class="text-lg font-semibold mb-4">Confirm Verification</h3>
+                <p>Are you sure you want to verify this transaction?</p>
+                <div class="mt-4 text-left">
+                    <p><strong>User Email:</strong> <span id="modalUserId"></span></p>
+                    <p><strong>Amount:</strong> <span id="modalAmount"></span></p>
+                    <p><strong>Symbol:</strong> <span id="modalSymbol"></span></p>
+                </div>
+                <div class="modal-buttons">
+                    <button class="modal-btn confirm" id="confirm">Confirm</button>
+                    <button class="modal-btn cancel" id="cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+<script>
+let currentTransactionId = null;
+
+// Search functionality
+const performSearch = () => {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+    const rows = document.querySelectorAll('#transactionTableBody tr');
+    let visibleCount = 0;
+    
+    rows.forEach((row, index) => {
+        const searchText = row.getAttribute('data-search-text');
+        const isVisible = searchTerm === '' || searchText.includes(searchTerm);
+        
+        if (isVisible) {
+            row.style.display = '';
+            visibleCount++;
+            // Update alternating row colors
+            row.className = index % 2 === 1 ? 'bg-gray' : '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update results counter
+    const resultsElement = document.getElementById('searchResults');
+    if (searchTerm === '') {
+        resultsElement.textContent = `Mostrando todas las transacciones (${visibleCount})`;
+    } else {
+        resultsElement.textContent = `Mostrando ${visibleCount} transacción(es) que coinciden con "${searchTerm}"`;
+    }
+}
+
+const filterStatus = (status) => {
+    const rows = document.querySelectorAll('#transactionTableBody tr');
+    
+    rows.forEach(row => {
+        if(status === "All") {
+            row.style.display = ""
+            return;
+        }
+
+        if([...row.querySelectorAll("td")].at(-2).innerText.trim() !== status) {
+            row.style.display = "none"
+        }else {
+            row.style.display = ""
+        }
+    })
+}
+
+let status = "Verified"
+
+document.getElementById("filterStatus").addEventListener("click", () => {
+    if(status === "Verified") {
+        status = "Pending"
+        filterStatus("Verified");
+    }else if(status === "Pending") {
+        status = "All"
+        filterStatus("Pending");
+    }else {
+        status = "Verified"
+        filterStatus("All")
+    }
+
+    document.getElementById("filterStatus").textContent = status
+})
+
+const showVerificationModal = (transactionId, userId, amount, symbol) => {
+    currentTransactionId = transactionId;
+    document.getElementById('modalUserId').textContent = userId;
+    document.getElementById('modalAmount').textContent = amount;
+    document.getElementById('modalSymbol').textContent = symbol;
+    document.getElementById('verificationModal').style.display = 'block';
+}
+
+const closeVerificationModal = () => {
+    document.getElementById('verificationModal').style.display = 'none';
+    currentTransactionId = null;
+}
+
+const confirmVerification = async() => {
+    if (!currentTransactionId) return;
+    
+    const row = document.querySelector(`tr[data-transaction-id="${currentTransactionId}"]`);
+    const verifyBtn = row.querySelector('.verify-btn');
+    
+    // Add loading state
+    row.classList.add('loading');
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = 'Verifying...';
+    
+    try {
+        console.log(currentTransactionId)
+        const response = await fetch('/admin/verify-transaction', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                transaction_id: currentTransactionId
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                const statusCell = row.querySelector('.status-badge');
+                statusCell.textContent = 'Verified';
+                statusCell.className = 'status-badge status-verified';
+                
+                const actionCell = row.querySelector('td:last-child');
+                actionCell.innerHTML = '<span class="text-green-600 text-sm">✓ Verified</span>';
+
+                // Update search text for the row
+                const searchText = row.getAttribute('data-search-text');
+                row.setAttribute('data-search-text', searchText.replace('pendiente', 'verificado'));
+
+                alert('Transaction verified successfully!');
+            } else {
+                alert('Error: ' + (result.message || 'Failed to verify transaction'));
+            }
+        } else {
+            alert('Error: Failed to verify transaction');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error: Failed to verify transaction');
+    } finally {
+        // Remove loading state
+        row.classList.remove('loading');
+        closeVerificationModal();
+    }
+}
+
+// Exchange Balances Functions
+const loadExchangeBalances = async() => {
+    const loadingElement = document.getElementById('loadingBalances');
+    const containerElement = document.getElementById('exchangeBalancesContainer');
+    const refreshBtn = document.getElementById('refreshBalancesBtn');
+    
+    // Show loading state
+    loadingElement.style.display = 'block';
+    containerElement.style.display = 'none';
+    refreshBtn.disabled = true;
+    refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+    
+    try {
+        const response = await fetch('/admin/real-balances', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            renderExchangeBalances(data.data);
+        } else {
+            throw new Error(data.error || 'Failed to load balances');
+        }
+        
+    } catch (error) {
+        console.error('Error loading exchange balances:', error);
+        showExchangeBalancesError('Failed to load exchange balances: ' + error.message);
+    } finally {
+        // Hide loading state
+        loadingElement.style.display = 'none';
+        refreshBtn.disabled = false;
+        refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
+    }
+}
+
+const renderExchangeBalances = (balances) => {
+    const container = document.getElementById('exchangeBalancesContainer');
+    container.innerHTML = '';
+    
+    for (const [exchangeName, exchangeData] of Object.entries(balances)) {
+        const exchangeDiv = document.createElement('div');
+        exchangeDiv.className = 'col-md-6 mb-4';
+        
+        const displayName = exchangeName.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        
+        let exchangeContent = `
+            <div class="border rounded p-3">
+                <h6 class="font-weight-bold text-uppercase">${displayName}</h6>
+        `;
+        
+        if (exchangeData.error) {
+            exchangeContent += `
+                <div class="alert alert-warning">
+                    <strong>Error:</strong> ${exchangeData.error}
+                </div>
+            `;
+        } else if (exchangeData.balances && exchangeData.balances.length > 0) {
+            exchangeContent += `
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Currency</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
+            
+            for (const balance of exchangeData.balances) {
+                const currency = balance.currency;
+                const amount = parseFloat(balance.amount).toFixed(8);
+                let usdtValue = '';
+                
+                // if (currency === 'USDT' || currency === 'USD') {
+                //     usdtValue = `$${parseFloat(balance.amount).toFixed(2)}`;
+                // } else if (balance.price_usdt && balance.price_usdt > 0) {
+                //     const value = parseFloat(balance.amount) * parseFloat(balance.price_usdt);
+                //     usdtValue = `$${value.toFixed(2)}`;
+                // } else {
+                //     usdtValue = '<span class="text-muted">N/A</span>';
+                // }
+                
+                exchangeContent += `
+                    <tr>
+                        <td><strong>${currency}</strong></td>
+                        <td>${amount}</td>
+                    </tr>
+                `;
+            }
+            
+            exchangeContent += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            exchangeContent += '<p class="text-muted">No balances found</p>';
+        }
+        
+        exchangeContent += '</div>';
+        exchangeDiv.innerHTML = exchangeContent;
+        container.appendChild(exchangeDiv);
+    }
+
+    container.style.display = 'flex';
+}
+
+const showExchangeBalancesError = (message) => {
+    const container = document.getElementById('exchangeBalancesContainer');
+    container.innerHTML = `
+        <div class="col-12">
+            <div class="alert alert-danger">
+                <strong>Error:</strong> ${message}
+            </div>
+        </div>
+    `;
+    container.style.display = 'block';
+}
+
+// Modified toggle function to load balances when opened
+const toggleExchangeDetails = () => {
+    const details = document.getElementById('exchangeDetails');
+    const icon = document.getElementById('exchangeToggleIcon');
+    
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        icon.className = 'fas fa-chevron-up ml-2';
+    } else {
+        details.style.display = 'none';
+        icon.className = 'fas fa-chevron-down ml-2';
+    }
+}
+
+// Initialize exchange balances functionality when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById("cancel").addEventListener("click", closeVerificationModal)
+    document.getElementById("confirm").addEventListener("click", confirmVerification)
+    document.getElementById('searchInput').addEventListener('input', performSearch);
+
+    const rows = document.querySelectorAll('#transactionTableBody tr');
+    document.getElementById('searchResults').textContent = `Mostrando todas las transacciones (${rows.length})`;
+
+    // Add event listener for toggle
+    const toggleElement = document.getElementById("toggleExchangeDetails");
+    if (toggleElement) toggleElement.addEventListener("click", toggleExchangeDetails);
+    
+    // Load initial balances
+    loadExchangeBalances();
+});
+</script>
+{% endblock %}

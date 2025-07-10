@@ -25,6 +25,7 @@ from app.models.trades import (
 from app.models.users import add_last_error_message
 from app.viewmodels.services.SimpleQTable import SimpleQTable
 from app.viewmodels.api.exchange.Exchange import ExchangeFactory
+from app.viewmodels.api.exchange.FatherExchange import Exchange
 from app.lib.utils.trading_strategies import (
     calculate_indicators,
     strategy_rsi,
@@ -103,8 +104,9 @@ class TradingBot:
     def __init__(
         self,
         user_id,
-        exchange_factory: ExchangeFactory,
+        exchange: Exchange,
         config: Dict,
+        type_wallet: str
     ):
         if hasattr(self, "_initialized"):
             # logger.debug(f"Bot instance for user {user_id} already initialized, skipping initialization") # Can be noisy
@@ -117,8 +119,13 @@ class TradingBot:
             logger.debug("Validating configuration for user %s", user_id)
             self.config = TradingConfig(**config)
             self.user_id = user_id
-            # Use the provided kraken_api instance (can be real or mock)
-            self.exchange = exchange_factory ### CHANGE KRAKEN_API
+            # Use the exchange factory to create an actual exchange instance
+            self.exchange = exchange
+            # self.exchange = exchange_factory.create_exchange(
+            #     name=type_wallet, 
+            #     user_id=user_id, 
+            #     trading_mode=self.config.trading_mode
+            # )
 
             logger.debug("Setting up exchange connection for user %s", user_id)
 
@@ -417,23 +424,42 @@ class TradingBot:
             # logger.debug(f"Fetching OHLCV data for {self.config.trading_pair} with timeframe {self.config.timeframe}") # Can be noisy
             # Fetch enough data for indicators (e.g., 26 for EMA26/RSI + buffer + 1 for engulfing)
             # 100 candles should be sufficient for most common indicators
-            ohlcv = self.exchange.fetch_ohlcv(
-                symbol=self.config.trading_pair,
-                timeframe=self.config.timeframe,
-                limit=100,
-            )
-
+            ohlcv = self.exchange.fetch_ohlcv_optimized(self.config.trading_pair, self.config.timeframe)
             if not ohlcv or len(ohlcv) == 0:
                 logger.warning(
                     f"No OHLCV data returned for {self.config.trading_pair}."
                 )
                 return None
+            
+            
+            # ohlcv = self.exchange.fetch_ohlcv(
+            #     symbol=self.config.trading_pair,
+            #     timeframe=self.config.timeframe,
+            #     limit=100,
+            # )
+
+            # if not ohlcv or len(ohlcv) == 0:
+            #     logger.warning(
+            #         f"No OHLCV data returned for {self.config.trading_pair}."
+            #     )
+            #     return None
 
             # logger.debug(f"Received {len(ohlcv)} OHLCV candles for {self.config.trading_pair}") # Can be noisy
             df = pd.DataFrame(
                 ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"]
             )
-            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            
+            # Handle timestamp conversion more robustly
+            try:
+                # First try with milliseconds
+                df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            except (ValueError, TypeError):
+                try:
+                    # If that fails, try without unit specification (assumes seconds)
+                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
+                except (ValueError, TypeError):
+                    # If both fail, try parsing as datetime string
+                    df["timestamp"] = pd.to_datetime(df["timestamp"])
 
             # Log info about the latest candle
             if not df.empty:
@@ -882,11 +908,14 @@ class TradingBot:
             ### CHANGE KRAKEN_API AND BINGXEXCHANGE
             volume = 0.0001 if self.config.trade_amount < 0.001 else self.config.trade_amount
             
-            order_data, _ = self.exchange.add_order(
-                side,
-                "BTC/USDT:USDT",
-                volume,
-            )
+            order_result = self.exchange.add_order(side,self.config.trading_pair,volume)
+
+            # Handle tuple response (order_data, status_code)
+            if isinstance(order_result, tuple):
+                order_data, status_code = order_result
+            else:
+                order_data = order_result
+                status_code = 200
 
             # order_data, _ = self.exchange.add_order(
             #     order_type="market",  # Using market orders as per original code logic
