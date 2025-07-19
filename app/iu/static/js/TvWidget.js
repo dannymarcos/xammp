@@ -1,10 +1,11 @@
 export default class TvWidget {
     constructor() {
         this.currentTradingSymbol = "";
-        this.currentExchange = "KRAKEN";
     }
 
-    loadTradingSymbol = async function(symbolToUse, exchangeToUse) {
+    loadTradingSymbol = async function(symbolToUse) {
+        // let symbolToUse;
+
         // Verificar si hay un símbolo guardado en localStorage
         const storedSymbol = localStorage.getItem('symbol');
         if (storedSymbol) {
@@ -27,18 +28,17 @@ export default class TvWidget {
 
         // Asegurarse de que symbolToUse no es undefined
         if (symbolToUse) {
-            this.initializeWidget(symbolToUse, exchangeToUse);
+            this.initializeWidget(symbolToUse);
         } else {
             console.error('No se pudo determinar un símbolo válido.');
         }
     }
 
-    initializeWidget = function(symbol, exchange) {
-        this.currentExchange = exchange || this.currentExchange;
+    initializeWidget = function(symbol) {
        this.widget = new TradingView.widget({
             "width": "100%",
             "height": 500,
-            "symbol": `${this.currentExchange}:${symbol}`,
+            "symbol": `KRAKEN:${symbol}`,
             "interval": "1",
             "timezone": "Etc/UTC",
             "theme": "dark",
@@ -65,21 +65,17 @@ export default class TvWidget {
         window.tradingViewWidget = this.widget; // Also store globally for debugging
     }
 
-    updateChartSymbol = function(symbol, exchange) {
+    updateChartSymbol = function(symbol) {
         if (this.widget) {
-            this.loadTradingSymbol(symbol, exchange);
+            this.loadTradingSymbol(symbol);
         }
     }
 
-    handleSymbolChange = function(newSymbol, exchange="KRAKEN") {
-        if (exchange) {
-            if (exchange.toLowerCase().includes('bingx')) this.currentExchange = "BINGX";
-            else if (exchange.toLowerCase().includes('kraken')) this.currentExchange = "KRAKEN";
-        }
+    handleSymbolChange = function(newSymbol) {
         this.currentTradingSymbol = newSymbol;
         this.saveCurrentTradingSymbol(localStorage, "symbol", newSymbol);
         this.updateTradingSymbol(newSymbol);
-        this.updateChartSymbol(newSymbol, this.currentExchange);
+        this.updateChartSymbol(newSymbol);
     }
 
     updateTradingSymbol = async function(symbol) {

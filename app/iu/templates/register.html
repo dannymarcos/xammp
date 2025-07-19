@@ -114,7 +114,7 @@
         
         try {
             document.querySelector('.login-form-loader').classList.remove('none');
-            const response = await fetch(`{{ url_for('auth.register') }}`, {
+            const response = await fetch(`{{ url_for('routes.register') }}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

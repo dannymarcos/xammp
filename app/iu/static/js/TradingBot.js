@@ -199,7 +199,7 @@ export class TradingBot {
 			const config = this.getBotConfig();
 			if (!config) return;
 
-			console.info(`Starting trading bot ${this.botId} with config:`, config);
+      console.info(`Starting trading bot ${this.botId} with config:`, config);
 
 			const response = await fetch("/bot/start_bot_trading", {
 				method: "POST",

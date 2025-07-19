@@ -1,4 +1,4 @@
-from app.viewmodels.api.exchange.Exchange import ExchangeFactory
+from app.viewmodels.api.bingx.BingxExchange import BingxExchange
 
-bingx = ExchangeFactory().create_exchange(name="bingx")
+bingx = BingxExchange()
 bingx.add_order("buy", "BTC/USDT:USDT", 0.0001)

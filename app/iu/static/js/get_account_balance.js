@@ -25,7 +25,7 @@ export default async function get_account_balance(method) {
         console.log("Balance de la cuenta obtenido:", json);
 
         // Acceder a los datos dentro de "result"
-        const balances = json.balance;
+        const balances = json.result;
 
         // Obtener el elemento <select>
         const $balanceSelect = d.getElementById('get-balance');
@@ -41,10 +41,10 @@ export default async function get_account_balance(method) {
             $balanceSelect.appendChild($option);
         } else {
             // Si hay fondos, iterar sobre los símbolos y precios
-            balances.forEach(({amount, currency}) => {
+            Object.entries(balances).forEach(([symbol, price]) => {
                 const $option = d.createElement('option');
-                $option.setAttribute('value', currency);
-                $option.textContent = `${currency}: ${amount}`; // Mostrar símbolo y precio
+                $option.setAttribute('value', symbol);
+                $option.textContent = `${symbol}: ${price}`; // Mostrar símbolo y precio
                 $balanceSelect.appendChild($option);
             });
         }

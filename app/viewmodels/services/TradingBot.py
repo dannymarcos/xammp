@@ -23,9 +23,8 @@ from app.models.trades import (
     update_trade_status,
 )
 from app.models.users import add_last_error_message
+from app.viewmodels.api.kraken.KrakenAPI import KrakenAPI
 from app.viewmodels.services.SimpleQTable import SimpleQTable
-from app.viewmodels.api.exchange.Exchange import ExchangeFactory
-from app.viewmodels.api.exchange.FatherExchange import Exchange
 from app.lib.utils.trading_strategies import (
     calculate_indicators,
     strategy_rsi,
@@ -67,10 +66,6 @@ class TradingConfig(BaseModel):
 
     @field_validator("trading_pair")
     def validate_pair(cls, v):
-        """"
-        Validate pair
-        """
-
         if "/" not in v:
             raise ValueError("Pair must contain '/' (e.g., BTC/USD)")
         return v.upper()
@@ -104,30 +99,48 @@ class TradingBot:
     def __init__(
         self,
         user_id,
-        exchange: Exchange,
+        kraken_api: KrakenAPI,
+        bingx_exchange,
+        api_key: str,
+        api_secret: str,
         config: Dict,
-        type_wallet: str
+        app_context_param=None,
+        wantend_exchange="kraken",
     ):
         if hasattr(self, "_initialized"):
             # logger.debug(f"Bot instance for user {user_id} already initialized, skipping initialization") # Can be noisy
             return
 
-        logger.info("Initializing trading bot for user %s", user_id)
+        logger.info(f"Initializing trading bot for user {user_id}")
 
         try:
             # Validate configuration
-            logger.debug("Validating configuration for user %s", user_id)
+            logger.debug(f"Validating configuration for user {user_id}")
             self.config = TradingConfig(**config)
             self.user_id = user_id
-            # Use the exchange factory to create an actual exchange instance
-            self.exchange = exchange
-            # self.exchange = exchange_factory.create_exchange(
-            #     name=type_wallet, 
-            #     user_id=user_id, 
-            #     trading_mode=self.config.trading_mode
-            # )
+            # Use the provided kraken_api instance (can be real or mock)
+            self.kraken_api = kraken_api
+            self.bingx_exchange = bingx_exchange
+            self.wantend_exchange = wantend_exchange
 
-            logger.debug("Setting up exchange connection for user %s", user_id)
+            logger.debug(f"Setting up exchange connection for user {user_id}")
+            # ccxt exchange for market data and possibly other calls not handled by kraken_api
+            # Ensure keys are provided even if using mock API for order placement, as ccxt needs them for market data
+            if not api_key or not api_secret:
+                logger.error("API keys are required for ccxt market data fetching.")
+                # Provide dummy keys if you absolutely must run without real keys for testing
+                # but fetch_ohlcv/ticker will likely fail unless mocked.
+                api_key = api_key or "dummy_key"
+                api_secret = api_secret or "dummy_secret"
+
+            self.exchange = ccxt.kraken(
+                {
+                    "apiKey": api_key,
+                    "secret": api_secret,
+                    "enableRateLimit": True,
+                    "options": {"adjustForTimeDifference": True},
+                }
+            )
 
             # Trading state
             self.running = False
@@ -147,20 +160,24 @@ class TradingBot:
                 q_table_path=f"q_tables/q_table_{user_id}.csv"
             )  # User-specific Q-table path
 
-            logger.info("✅ Successfully initialized bot for user %s\n%s", user_id, self.config.model_dump_json(indent=4))
-            logger.debug("⚙️ Configuration for user %s:\n%s", user_id, self.config.model_dump_json(indent=4))
+            logger.info(
+                f"✅ Successfully initialized bot for user {user_id} \n {self.config.model_dump_json(indent=4)}"
+            )
+            logger.debug(
+                f"⚙️ Configuration for user {user_id}:\n{self.config.model_dump_json(indent=4)}"
+            )
         except Exception as e:
-            logger.error("Failed to initialize bot for user %s: %s", user_id, str(e))
-            logger.debug("Initialization error details: %s", traceback.format_exc())
-            self._add_bot_error(f"Initialization failed: %s", e)
+            logger.error(f"Failed to initialize bot for user {user_id}: {str(e)}")
+            logger.debug(f"Initialization error details: {traceback.format_exc()}")
+            self._add_bot_error(f"Initialization failed: {e}")
             raise  # Re-raise to indicate failure
 
     def _force_stop(self):
         self.running = False
-        print("🛑 Forced stop for bot %s", self.user_id)
+        print(f"🛑 Forced stop for bot {self.user_id}")
 
     def _add_bot_error(self, error):
-        logger.error("Bot Error for %s: %s", self.user_id, error)
+        logger.error(f"Bot Error for {self.user_id}: {error}")
         self.bot_errors.append(error)
         # Keep a limited history of errors
         self.bot_errors = self.bot_errors[-10:]  # Keep last 10 errors
@@ -266,7 +283,7 @@ class TradingBot:
 
     def _run_loop(self):
         """Main trading loop"""
-        logger.info("🚀 Starting trading loop for user %s", self.user_id)
+        logger.info(f"🚀 Starting trading loop for user {self.user_id}")
         loop_count = 0
         # Consider managing an initial state or waiting period
         # time.sleep(5) # Optional initial delay
@@ -276,7 +293,9 @@ class TradingBot:
             # logger.debug(f"--- Trading loop iteration {loop_count} for user {self.user_id} ---") # Can be noisy
 
             if self._should_stop():
-                logger.info("Bot _should_stop condition met for user %s. Exiting loop.", self.user_id)
+                logger.info(
+                    f"Bot _should_stop condition met for user {self.user_id}. Exiting loop."
+                )
                 break  # Exit the loop if stop condition is met
 
             try:
@@ -424,42 +443,23 @@ class TradingBot:
             # logger.debug(f"Fetching OHLCV data for {self.config.trading_pair} with timeframe {self.config.timeframe}") # Can be noisy
             # Fetch enough data for indicators (e.g., 26 for EMA26/RSI + buffer + 1 for engulfing)
             # 100 candles should be sufficient for most common indicators
-            ohlcv = self.exchange.fetch_ohlcv_optimized(self.config.trading_pair, self.config.timeframe)
+            ohlcv = self.exchange.fetch_ohlcv(
+                symbol=self.config.trading_pair,
+                timeframe=self.config.timeframe,
+                limit=100,
+            )
+
             if not ohlcv or len(ohlcv) == 0:
                 logger.warning(
                     f"No OHLCV data returned for {self.config.trading_pair}."
                 )
                 return None
-            
-            
-            # ohlcv = self.exchange.fetch_ohlcv(
-            #     symbol=self.config.trading_pair,
-            #     timeframe=self.config.timeframe,
-            #     limit=100,
-            # )
-
-            # if not ohlcv or len(ohlcv) == 0:
-            #     logger.warning(
-            #         f"No OHLCV data returned for {self.config.trading_pair}."
-            #     )
-            #     return None
 
             # logger.debug(f"Received {len(ohlcv)} OHLCV candles for {self.config.trading_pair}") # Can be noisy
             df = pd.DataFrame(
                 ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"]
             )
-            
-            # Handle timestamp conversion more robustly
-            try:
-                # First try with milliseconds
-                df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-            except (ValueError, TypeError):
-                try:
-                    # If that fails, try without unit specification (assumes seconds)
-                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="s")
-                except (ValueError, TypeError):
-                    # If both fail, try parsing as datetime string
-                    df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
 
             # Log info about the latest candle
             if not df.empty:
@@ -904,26 +904,24 @@ class TradingBot:
             # The price parameter here is not used by Kraken for MARKET orders,
             # but is kept in the signature as it was in the original code.
             # The actual fill price will be in the response or fetched later.
-
-            ### CHANGE KRAKEN_API AND BINGXEXCHANGE
-            volume = 0.0001 if self.config.trade_amount < 0.001 else self.config.trade_amount
-            
-            order_result = self.exchange.add_order(side,self.config.trading_pair,volume)
-
-            # Handle tuple response (order_data, status_code)
-            if isinstance(order_result, tuple):
-                order_data, status_code = order_result
+            if self.wantend_exchange == "bingx":
+                order_data, _ = self.bingx_exchange.add_order(
+                    side,
+                    "BTC/USDT:USDT",
+                    (
+                        0.0001
+                        if self.config.trade_amount < 0.001
+                        else self.config.trade_amount
+                    ),
+                )
             else:
-                order_data = order_result
-                status_code = 200
-
-            # order_data, _ = self.exchange.add_order(
-            #     order_type="market",  # Using market orders as per original code logic
-            #     order_direction=side,
-            #     volume=amount_to_trade,  # Amount to trade (base currency)
-            #     symbol=self.config.trading_pair,
-            #     order_made_by="bot",
-            # )
+                order_data, _ = self.kraken_api.add_order(
+                    order_type="market",  # Using market orders as per original code logic
+                    order_direction=side,
+                    volume=amount_to_trade,  # Amount to trade (base currency)
+                    symbol=self.config.trading_pair,
+                    order_made_by="bot",
+                )
 
             if not order_data:
                 error = order_data["error"]

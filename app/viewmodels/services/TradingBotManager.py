@@ -4,9 +4,10 @@ import random
 import logging
 import traceback
 from app.models.users import User
+from app.viewmodels.api.kraken.KrakenAPI import KrakenAPI
 from app.viewmodels.services.TradingBot import TradingBot
 from app.viewmodels.services.StrategyTradingBot import StrategyTradingBot
-from app.viewmodels.api.exchange.Exchange import ExchangeFactory
+
 
 # Configure logging if not already configured
 logger = logging.getLogger(__name__)
@@ -15,17 +16,16 @@ logger = logging.getLogger(__name__)
 class TradingBotManager:
     _bots = {}  # Stores active bots by user_id
     _legacy_bots = {}  # Stores legacy bots for testing purposes
-    exchange: ExchangeFactory = None
-    type_wallet = None
 
     @classmethod
     def start_bot(
         cls,
         user_id,
-        exchange: ExchangeFactory,
+        kraken_api: KrakenAPI,
+        bingx_exchange,
         config,
+        wanted_exchange="kraken",
         bot_id="basic-bot",
-        type_wallet: str = ""
     ):
         """
         Start a trading bot for the specified user using the TradingBot implementation
@@ -39,60 +39,80 @@ class TradingBotManager:
             bool: True if the bot was started successfully, False otherwise
         """
         try:
-            logger.info("[%s] 🥵 Starting bot for user %s", bot_id, user_id)
+            logger.info(f"[{bot_id}] 🥵 Starting bot for user {user_id}")
 
             # Check if bot is already running
             if user_id in cls._bots:
-                logger.warning("Bot for user %s is already running", user_id)
+                logger.warning(f"Bot for user {user_id} is already running")
                 return False
 
             # Get API credentials from user
             user = User.query.filter_by(id=user_id).first()
             if not user:
-                logger.error("User %s not found", user_id)
+                logger.error(f"User {user_id} not found")
                 return False
 
-            cls.exchange = exchange
-            cls.type_wallet = type_wallet
+            api_key = user.kraken_api_key
+            api_secret = user.kraken_api_secret
+
+            if not api_key or not api_secret:
+                logger.error(f"Missing API credentials for user {user_id}")
+                return False
 
             # Create and start the TradingBot
             try:
-                logger.debug("Initializing TradingBot for user %s", user_id)
-                    
-                if bot_id == "strategy-bot":
-                    bot = StrategyTradingBot(
-                        user_id,
-                        cls.exchange,
-                        config,
-                        cls.type_wallet
-                    )
-                else:
-                    # "basic-bot" or others
+                logger.debug(f"Initializing TradingBot for user {user_id}")
+                if bot_id == "basic-bot":
                     bot = TradingBot(
                         user_id,
-                        cls.exchange,
+                        kraken_api,
+                        bingx_exchange,
+                        api_key,
+                        api_secret,
                         config,
-                        cls.type_wallet
+                        wantend_exchange=wanted_exchange,
+                    )
+                elif bot_id == "strategy-bot":
+                    exchange = kraken_api
+                    if wanted_exchange == "bingx":
+                        exchange = bingx_exchange
+                    bot = StrategyTradingBot(
+                        user_id,
+                        exchange,
+                        config
+                    )
+                else:
+                    bot = TradingBot(
+                        user_id,
+                        kraken_api,
+                        bingx_exchange,
+                        api_key,
+                        api_secret,
+                        config,
+                        bot_id,
+                        wantend_exchange=wanted_exchange,
                     )
 
-                logger.debug("Starting TradingBot for user %s", user_id)
+                logger.debug(f"Starting TradingBot for user {user_id}")
                 if not bot.start():
-                    logger.error("Failed to start bot for user %s", user_id)
+                    logger.error(f"Failed to start bot for user {user_id}")
                     return False
 
                 # Store the bot instance
                 cls._bots[user_id] = bot
-                logger.info("Successfully started bot for user %s", user_id)
+                logger.info(f"Successfully started bot for user {user_id}")
                 return True
 
             except Exception as e:
-                logger.error("Error initializing TradingBot for user %s: %s", user_id, str(e))
-                logger.debug("Initialization error details: %s", traceback.format_exc())
+                logger.error(
+                    f"Error initializing TradingBot for user {user_id}: {str(e)}"
+                )
+                logger.debug(f"Initialization error details: {traceback.format_exc()}")
                 return False
 
         except Exception as e:
-            logger.error("Unexpected error starting bot for user %s: %s", user_id, str(e))
-            logger.debug("Error details: %s", traceback.format_exc())
+            logger.error(f"Unexpected error starting bot for user {user_id}: {str(e)}")
+            logger.debug(f"Error details: {traceback.format_exc()}")
             return False
 
     @classmethod
@@ -162,7 +182,7 @@ class TradingBotManager:
 
     # Legacy methods for testing purposes
     @classmethod
-    def start_legacy_bot(cls, user_id, config):
+    def start_legacy_bot(cls, user_id, kraken_api: KrakenAPI, config):
         """
         Start a legacy trading bot for testing purposes
 
@@ -175,18 +195,21 @@ class TradingBotManager:
             bool: True if the bot was started successfully, False otherwise
         """
         try:
-            logger.info("Starting legacy bot for user %s", user_id)
+            logger.info(f"Starting legacy bot for user {user_id}")
 
             # Check if bot is already running
             if user_id in cls._legacy_bots:
-                logger.warning("Legacy bot for user %s is already running", user_id)
+                logger.warning(f"Legacy bot for user {user_id} is already running")
                 return False
 
             # Get API credentials from user
             user = User.query.filter_by(id=user_id).first()
             if not user:
-                logger.error("User %s not found", user_id)
+                logger.error(f"User {user_id} not found")
                 return False
+
+            api_key = user.api_key
+            api_secret = user.api_secret
 
             # Create and start the legacy bot
             stop_event = Event()
@@ -194,7 +217,9 @@ class TradingBotManager:
                 target=run_trading_bot,
                 args=(
                     current_app._get_current_object(),
-                    cls.exchange,
+                    kraken_api,
+                    api_key,
+                    api_secret,
                     config,
                     stop_event,
                 ),
@@ -203,12 +228,12 @@ class TradingBotManager:
 
             cls._legacy_bots[user_id] = {"thread": bot_thread, "stop_event": stop_event}
             bot_thread.start()
-            logger.info("Successfully started legacy bot for user %s", user_id)
+            logger.info(f"Successfully started legacy bot for user {user_id}")
             return True
 
         except Exception as e:
-            logger.error("Error starting legacy bot for user %s: %s", user_id, str(e))
-            logger.debug("Error details: %s", traceback.format_exc())
+            logger.error(f"Error starting legacy bot for user {user_id}: {str(e)}")
+            logger.debug(f"Error details: {traceback.format_exc()}")
             return False
 
     @classmethod
@@ -256,7 +281,7 @@ class TradingBotManager:
 
 
 def run_trading_bot(
-    app, exchange, config, stop_event
+    app, kraken_api: KrakenAPI, api_key: str, api_secret: str, config, stop_event
 ):
     """
     Legacy trading bot implementation for testing purposes
@@ -270,14 +295,14 @@ def run_trading_bot(
         stop_event: The event to signal when the bot should stop
     """
     with app.app_context():
-        logger.info("Legacy bot started with config: %s", config)
+        logger.info(f"Legacy bot started with config: {config}")
 
         try:
             while not stop_event.is_set():  # Critical check
                 logger.debug("Legacy bot cycle started")
 
                 if random.random() > 0.5:
-                    exchange.add_order(
+                    kraken_api.add_order(
                         order_type="limit",
                         order_direction="buy",
                         volume=5,
@@ -292,7 +317,7 @@ def run_trading_bot(
                 stop_event.wait(timeout=1)  # Checks event every second
 
         except Exception as e:
-            logger.error("Legacy bot error: %s", str(e))
-            logger.debug("Error details: %s", traceback.format_exc())
+            logger.error(f"Legacy bot error: {str(e)}")
+            logger.debug(f"Error details: {traceback.format_exc()}")
         finally:
             logger.info("Legacy bot stopped cleanly")

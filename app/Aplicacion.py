@@ -1,8 +1,11 @@
 #app/Aplicacion.py
 
-from flask import Flask, render_template
+#app/Aplicacion.py
+
+from flask import Flask
 from flask_cors import CORS
 from flask_login import LoginManager  # Import LoginManager
+from flask_sqlalchemy import SQLAlchemy
 from flask_babel import Babel, _
 import sqlalchemy  # Import Babel and _ function for translations
 
@@ -17,7 +20,6 @@ class Application:
         self.app.config.from_object(config_object)
         
         # Set default Babel configuration
-        self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000 # 1 year
         self.app.config['BABEL_DEFAULT_LOCALE'] = 'en'
         self.app.config['BABEL_DEFAULT_TIMEZONE'] = 'UTC'
         
@@ -36,11 +38,10 @@ class Application:
         # Initialize Flask-Login
         self.login_manager = LoginManager()
         self.login_manager.init_app(self.app)
-        self.login_manager.login_view = 'auth.login'
+        self.login_manager.login_view = 'routes.login'  # Set the login view route (using blueprint name)
         self._register_user_loader() # Register the user loader callback
 
         self.init_db()
-        self._register_error_handlers()  # Register error handlers
 
     def init_db(self):
         """Inicializa la base de datos con manejo de errores mejorado"""
@@ -80,9 +81,6 @@ class Application:
                         raise RuntimeError(error_msg)
                     
                     self.app.logger.info(f"✅ Base de datos inicializada. Tablas: {', '.join(existing_tables)}")
-                    
-                    # Crear usuario admin si no existe
-                    self._create_admin_user()
         
         except sqlalchemy.exc.OperationalError as oe:
             error_msg = f"🚨 Error de conexión ({driver_name}): {str(oe)}"
@@ -95,45 +93,8 @@ class Application:
             self.app.logger.exception(error_msg)
             raise RuntimeError(error_msg) from e
 
-    def _create_admin_user(self):
-        """Crea el usuario admin si no existe"""
-        try:
-            admin_email = self.app.config['ADMIN_EMAIL']
-            admin_password = self.app.config['ADMIN_PASSWORD']
-            admin_name = self.app.config['ADMIN_NAME']
-
-            # Verificar si el usuario admin ya existe
-            existing_admin = User.query.filter_by(email=admin_email).first()
-            
-            if existing_admin:
-                self.app.logger.info(f"✅ Usuario admin ya existe: {admin_email}")
-                return
-            
-            # Crear nuevo usuario admin
-            admin_user = User(
-                email=admin_email,
-                full_name=admin_name,
-                role="admin"
-            )
-            admin_user.set_password(admin_password)
-            
-            db.session.add(admin_user)
-            db.session.commit()
-            
-            self.app.logger.info(f"✅ Usuario admin creado exitosamente: {admin_email}")
-            
-        except Exception as e:
-            self.app.logger.error(f"❌ Error creando usuario admin: {str(e)}")
-            db.session.rollback()
-
     def register_blueprint(self, blueprint):
         self.app.register_blueprint(blueprint)
-
-    def _register_error_handlers(self):
-        """Register custom error handlers"""
-        @self.app.errorhandler(404)
-        def not_found_error(error):
-            return render_template('errors/404.html'), 404
 
     def run(self, host='0.0.0.0', port=8080, debug=True, threaded=True):
         self.app.run(host=host, port=port, debug=debug, threaded=threaded)

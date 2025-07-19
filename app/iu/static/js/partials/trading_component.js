@@ -20,11 +20,6 @@ function showAlert(message, type = 'info') {
 function renderUserTrades(trades) {
     const tbody = document.getElementById('user-trade-history-body');
     
-    if (!tbody) {
-        console.error('Trade history table body not found');
-        return;
-    }
-    
     if (!trades || trades.length === 0) {
         tbody.innerHTML = `
             <tr>
@@ -178,16 +173,11 @@ function updateSellAvailableBalance(availableBalance, currencySymbol) {
 async function fetchUserTrades() {
     try {
         const res = await fetch(API_ENDPOINTS.getUserTrades);
-        if (!res.ok) {
-            throw new Error(`HTTP error! status: ${res.status}`);
-        }
         const data = await res.json();
-        console.log('Fetched trades:', data);
-        return data.trades || [];
+        return data.trades
     } catch (error) {
         showAlert('Error fetching trades', 'error');
         console.error('Error fetching trades:', error);
-        return [];
     }
 }
 
@@ -224,22 +214,19 @@ async function fetchAccountBalance() {
     }
 }
 
-async function getSymbolPrice(symbol, exchange="futures") {
+async function getSymbolPrice(symbol) {
     try {
-        console.log("#".repeat(50));
-        console.log({symbol, exchange});
         if (!symbol) {
             console.warn("Symbol not provided");
             return;
         }
-        const res = await fetch(`${API_ENDPOINTS.getSymbolPrice}?symbol=${symbol}&exchange=${exchange}`);
-        console.log(res);
+        const res = await fetch(`${API_ENDPOINTS.getSymbolPrice}?symbol=${symbol}`);
+        
         if (!res.ok) {
             throw new Error(`HTTP error! status: ${res.status}`);
         }
         
         const json = await res.json();
-        console.log(json);
         // console.log("Symbol price response:", json);
         
         // Check if the response has the expected structure
@@ -495,13 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert("Error: " + result.error, "error");
         } else {
             showAlert("Order placed successfully", "info");
-            // Update trade history with the returned trades
-            if (result.all_trades) {
-                renderUserTrades(result.all_trades);
-            } else {
-                // Fallback to fetching trades if all_trades is not provided
-                fetchUserTrades().then(renderUserTrades);
-            }
+            fetchUserTrades().then(renderUserTrades);
         }
     }
 
@@ -530,13 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert("Error: " + result.error, "error");
         } else {
             showAlert("Order placed successfully", "info");
-            // Update trade history with the returned trades
-            if (result.all_trades) {
-                renderUserTrades(result.all_trades);
-            } else {
-                // Fallback to fetching trades if all_trades is not provided
-                fetchUserTrades().then(renderUserTrades);
-            }
+            fetchUserTrades().then(renderUserTrades);
         }
     }
 
@@ -567,13 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert("Error: " + result.error, "error");
         } else {
             showAlert("Order placed successfully", "info");
-            // Update trade history with the returned trades
-            if (result.all_trades) {
-                renderUserTrades(result.all_trades);
-            } else {
-                // Fallback to fetching trades if all_trades is not provided
-                fetchUserTrades().then(renderUserTrades);
-            }
+            fetchUserTrades().then(renderUserTrades);
         }
     }
 
