@@ -304,13 +304,7 @@ def add_order():
         
         # Get the exchange identifier for balance filtering
         exchange_id = exchange_mapping.get(trading_mode, "general")
-        
-        balance_array = wallet.get_balance(exchange="general")
-        balance = {}
-        for item in balance_array:
-            balance[item['currency']] = item['amount']
-        balance_usdt = balance.get("USDT", 0)
-        
+                
         if trading_mode == "spot":
             ordertype = data.get("orderType")
             order_direction = data.get("orderDirection")
@@ -332,8 +326,6 @@ def add_order():
                     return jsonify({"error": f"Faltan parámetros requeridos {required_params}"}), 400
 
             _symbol_ = data["symbol"].split("USD")[0]
-
-            balance_other_crypto = balance.get(_symbol_, 0)
             
             # Validate master account balance first
             if data["orderDirection"] == "buy":
@@ -426,7 +418,7 @@ def add_order():
                     if not is_valid:
                         return jsonify({"error": error_msg}), 400
 
-            order_result = exchange.add_order(
+            order, fees, price_cripto_in_usdt, cost_in_usdt, fees_currency, status_code = exchange.add_order(
                 leverage=data["leverage"],
                 order_type=data["orderType"],
                 volume=data["amount"],
@@ -437,16 +429,11 @@ def add_order():
                 order_direction=data["orderDirection"],
             )
             
-            # Handle tuple response (order_data, status_code)
-            if isinstance(order_result, tuple):
-                order, status_code = order_result
-            else:
-                order = order_result
-                status_code = 200
-
             if status_code != 200:
                 return jsonify({"error": order["error"], "success": False}), status_code
             
+            price = amount * price_cripto_in_usdt
+
             # Record transaction in wallet if order was successful
             try:
                 # Extract currency from symbol (e.g., "BTCUSDT" -> "USDT")
@@ -456,20 +443,19 @@ def add_order():
                 amount_traded = float(data["amount"]) * float(data["leverage"])
 
                 if data["orderDirection"] == "buy":
-                    wallet_admin.add_found(user_id, calculate_amount_with_commission(amount_traded, trading_mode, "buy"), currency, exchange_id)
-                    wallet_admin.add_found(user_id, -price, "USDT", "general")
+                    print("fees:", fees)
+                    print("fees_currency:", fees_currency)
+                    print("price_cripto_in_usdt:", price_cripto_in_usdt)
+                    print("amount_traded:", amount_traded)
+                    print("comision:", (fees/price_cripto_in_usdt))
+
+                    wallet_admin.add_found(user_id, amount_traded - (fees/price_cripto_in_usdt), currency, exchange_id)
+                    wallet_admin.add_found(user_id, -cost_in_usdt, "USDT", "general")
                 elif data["orderDirection"] == "sell":
                     wallet_admin.add_found(user_id, -amount_traded, currency, exchange_id)
-                    wallet_admin.add_found(user_id, calculate_amount_with_commission(price, trading_mode, "sell"), "USDT", "general")
+                    wallet_admin.add_found(user_id, cost_in_usdt - fees, "USDT", "general")
             except Exception as wallet_error:
                 logger.error(f"Error recording wallet transaction: {wallet_error}")
-            
-            print("/"*50)
-            print("Total en dolares:", price)
-            print("Total en la cripto:", amount_traded)
-            print("Comision (buy):", calculate_amount_with_commission(amount_traded, trading_mode, "buy"))
-            print("Comision (sell):", calculate_amount_with_commission(amount_traded, trading_mode, "sell"))
-            print("/"*50)
             
             return jsonify({"order": order, "success": True})
         elif trading_mode == "futures":
@@ -503,7 +489,7 @@ def add_order():
                 if not wallet.has_balance_in_currency(amount * leverage, symbol_base, symbol_base, exchange_id):
                     return jsonify({"error": f"Insufficient {symbol_base} balance for futures trading. Required margin: {amount * leverage} {symbol_base}"}), 400
 
-            order_result, error = exchange.add_order(
+            order_result, fees, price_cripto_in_usdt, error = exchange.add_order(
                 leverage=data["leverage"],
                 order_type=data["orderType"],
                 volume=data["amount"],
@@ -525,22 +511,20 @@ def add_order():
             # Record transaction in wallet if order was successful
             if error is None:
                 try:
-                    # For futures, we need to record the margin used
-                    current_price = get_current_price(exchange, data["symbol"])
-                    if current_price is None:
-                        return jsonify({"error": "Unable to get current price"}), 400
-                    
-                    margin_used = amount * leverage
-                    price = float(current_price) * margin_used
+                    total_usdt = amount * price_cripto_in_usdt
 
                     if data["orderDirection"] == "buy":
-                        wallet_admin.add_found(user_id, calculate_amount_with_commission(margin_used, trading_mode, "buy"), symbol_base, exchange_id)
-                        wallet_admin.add_found(user_id, -price, "USDT", "general")
+                        margin_used = amount * leverage
+
+                        wallet_admin.add_found(user_id, margin_used - fees, symbol_base, exchange_id)
+                        wallet_admin.add_found(user_id, -total_usdt, "USDT", "general")
                     elif data["orderDirection"] == "sell":
-                        wallet_admin.add_found(user_id, calculate_amount_with_commission(price, trading_mode, "sell"), "USDT", "general")
-                        wallet_admin.add_found(user_id, -margin_used, symbol_base, exchange_id)
+                        fees_in_usdt = fees * price_cripto_in_usdt
+                        net_usdt_received = total_usdt - fees_in_usdt
+
+                        wallet_admin.add_found(user_id, net_usdt_received, "USDT", "general")
+                        wallet_admin.add_found(user_id, -amount, symbol_base, exchange_id)
                 except Exception as wallet_error:
-                    # ccxt.base.errors.BadRequest: bingx {"code":80001,"msg":"Insufficient margin","data":{}}
                     logger.error(f"Error recording wallet transaction: {wallet_error}")
             
             if error is not None:

@@ -41,15 +41,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
 	// Function to save a strategy
 	const saveStrategy = async () => {
-	    const name = strategyNameInput.value;
-	    const text = strategyDescriptionInput.value;
+		const name = strategyNameInput.value;
+		const text = strategyDescriptionInput.value;
 
-			if (!name || !text) {
-			    alert("Please enter a strategy name and description.");
-			    return;
-			}
-	    saveStrategyButton.disabled = true;
-	    saveStrategyButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+		if (!name || !text) {
+			alert("Please enter a strategy name and description.");
+			return;
+		}
+		saveStrategyButton.disabled = true;
+		saveStrategyButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
 
 		try {
 			const response = await fetch("/strategies", {
@@ -63,28 +63,28 @@ document.addEventListener("DOMContentLoaded", () => {
 			const data = await response.json();
 
 			if (data.message === "Strategy saved successfully") {
-			    strategyNameInput.value = "";
-			    strategyDescriptionInput.value = "";
-			    fetchStrategies();
+				strategyNameInput.value = "";
+				strategyDescriptionInput.value = "";
+				fetchStrategies();
 			} else {
-			    console.error("Error saving strategy:", data.message);
+				console.error("Error saving strategy:", data.message);
 			}
-} catch (error) {
+		} catch (error) {
 			console.error("Error saving strategy:", error);
-} finally {
+		} finally {
 			saveStrategyButton.disabled = false;
 			saveStrategyButton.innerHTML = '<i class="bi bi-save"></i> Save Strategy';
-}
-};
+		}
+	};
 
 	// Function to delete a strategy
 	const deleteStrategy = async () => {
-	    if (!selectedStrategyId) {
-	        alert("Please select a strategy to delete.");
-	        return;
-	    }
-	    deleteStrategyButton.disabled = true;
-	    deleteStrategyButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Deleting...';
+		if (!selectedStrategyId) {
+			alert("Please select a strategy to delete.");
+			return;
+		}
+		deleteStrategyButton.disabled = true;
+		deleteStrategyButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Deleting...';
 
 		try {
 			const response = await fetch("/strategies", {
@@ -98,19 +98,19 @@ document.addEventListener("DOMContentLoaded", () => {
 			const data = await response.json();
 
 			if (data.message === "Strategy deleted successfully") {
-			    fetchStrategies();
-			    selectedStrategyId = null;
-			    deleteStrategyButton.disabled = true;
+				fetchStrategies();
+				selectedStrategyId = null;
+				deleteStrategyButton.disabled = true;
 			} else {
-			    console.error("Error deleting strategy:", data.message);
+				console.error("Error deleting strategy:", data.message);
 			}
-} catch (error) {
+		} catch (error) {
 			console.error("Error deleting strategy:", error);
-} finally {
+		} finally {
 			deleteStrategyButton.disabled = false;
 			deleteStrategyButton.innerHTML = '<i class="bi bi-trash"></i> Delete Selected';
-}
-};
+		}
+	};
 
 	// Event listeners
 	saveStrategyButton.addEventListener("click", saveStrategy);

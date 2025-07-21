@@ -35,7 +35,13 @@
             <div class="login-container">
                 <div class="login-form-wrapper">
                     <div class="form-container">
-                        <h1 class="form-title">Crea tu cuenta en AegisIA</h1>
+                        {% if referrer_name %}
+                        <div class="alert alert-info" style="background-color: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 12px; margin-bottom: 20px; text-align: center;">
+                            <strong>¡Bienvenido a AegisIA!</strong><br>
+                            <span style="color: #1976d2;">{{ referrer_name }} te ha invitado a unirte a nuestra plataforma.</span>
+                        </div>
+                        {% endif %}
+                        <h1 class="form-title" style="justify-self: center;">Crea tu cuenta en AegisIA</h1>
                         <form class="login-form" id="registerForm">
                             <div class="form-group">
                                 <div class="input-container">
@@ -76,6 +82,23 @@
                                         </button>
                                     </div>
                                 </div>
+
+                                
+                                {% if referral_code %}
+                                <div class="input-container" style="display: none;">
+                                    <div class="input-wrapper">
+                                        <input class="input-field" 
+                                               type="text" 
+                                               name="referral_code"
+                                               id="referral_code" 
+                                               value="{{ referrer_name }}"
+                                               placeholder="Código de referido"
+                                               readonly
+                                               style="background-color: #f8f9fa; color: #6c757d;">
+                                        <input type="hidden" name="referral_code_hidden" value="{{ referral_code }}">
+                                    </div>
+                                </div>
+                                {% endif %}
                                 
                                 <input type="submit" class="submit-button" value="Registrarse">
                                 
@@ -109,12 +132,14 @@
         const full_name = document.getElementById('full_name').value;
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
-        const body = JSON.stringify({ full_name, email, password});
+        const referral_code_hidden = document.querySelector('input[name="referral_code_hidden"]');
+        const referral_code = referral_code_hidden ? referral_code_hidden.value : null;
+        const body = JSON.stringify({ full_name, email, password, referral_code });
         console.log({body})
         
         try {
             document.querySelector('.login-form-loader').classList.remove('none');
-            const response = await fetch(`{{ url_for('routes.register') }}`, {
+            const response = await fetch(`{{ url_for('auth.register') }}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

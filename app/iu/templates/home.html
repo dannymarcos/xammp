@@ -4,16 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <base href="/">
-    <link rel="stylesheet" href="/static/css/styles.css" />
+    <!-- <link rel="stylesheet" href="/static/css/styles.css" /> -->
     <link rel="stylesheet" href="/static/css/chart.css" />
     <title>Aegis-IA</title>
 
     <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-SgOJa3DmI69IUzQ2PVdRZhwQ+dy64/BUtbMJw1MZ8t5HZApcHrRKUc4W0kG879m7" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js" integrity="sha384-k6d4wzSIapyDyv1kpU366/PK5hCdSbCRGRCMv+eplOQJWyd1fbcAu9OCUj5zNLiq" crossorigin="anonymous"></script>
+		<!-- Custom CSS (Brand colors optional) -->
+		<link
+			href="{{ url_for('static', filename='css/custom.css') }}"
+			rel="stylesheet"
+		/>
+    <!-- Font Awesome Icons -->
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"
+			integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg=="
+			crossorigin="anonymous"
+			referrerpolicy="no-referrer"
+		/>
   </head>
   <body>
     
-    {% include 'partials/_header.html' %}
+    {% include 'partials/_nav.html' %}
     {% if error %}
     <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
       <span class="block sm:inline">{{ error }}</span>
@@ -23,39 +37,7 @@
 
     <div class ="content-body">
 
-      <div class="main-content">
-
-            <div class="flex justify-between items-start p-4">
-              <div class="flex space-x-4">
-      
-                <div class="relative">
-                  <button id="investment-btn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                    Inversion
-                  </button>
-                </div>
-      
-                <div class="relative">
-                  <button id="generate-referral-btn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                    Generar Link de Referido
-                  </button>
-                  <script src="/static/js/classes.js"></script>
-                </div>
-              </div>
-
-              <div class="account-balance-container bg-gray-100 p-4 rounded shadow-lg">
-                <select id="get-balance" class="w-full p-2 border rounded" >
-                  <option value="usd"> 
-                      <h2 class="text-xl font-bold mb-4">Balance de Cuenta</h2>
-                  </option>
-                  <!-- <option value="eur">
-                    <div class="balance-item">
-                      <span class="asset"></span>
-                    </div>
-                  </option> -->
-                </select>
-              </div>
-            </div>
-      
+      <div class="main-content">      
             <div class="hero-section text-center py-4">
               <h1 class="text-4xl font-bold mb-2">Welcome to Aegis-IA</h1>
               <p class="text-lg mb-2">Leverage the power of AI for smarter trading decisions.</p>
@@ -63,18 +45,18 @@
             <div class="crypto-section bg-gray-100 p-4 rounded mb-8">
               <h2 class="text-2xl font-bold mb-4">Cryptocurrencies</h2>
               <button id="change-mode-btn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" style="display:  none;"></button>
-              <div class="flex items-center mb-4 flex-wrap flex-col">
+              <div class="flex items-center mb-4 flex-wrap flex-col w-100">
                 <!-- Aqui va la barra de busqueda -->
                 <div class="flex items-center mb-4 flex-wrap gap-3">
                  <!--  <input type="submit" id="fetchCryptos" value="Buscar cryptos" class="bg-blue-500 text-white px-4 py-2 rounded mr-2"> -->
 
                   <div class="relative flex-grow">
-                    <input type="text" id="crypto-search" class="w-full pl-10 pr-2 py-2 border rounded" placeholder="Search cryptos...">
+                    <input type="text" id="crypto-search" class="form-control mb-2" placeholder="Search cryptos...">
                   </div>
   
                 </div>
                 <!-- Aqui va la lista de cryptos -->
-                <ul  id="crypto-list" class="list-none"></ul>
+                <ul  id="crypto-list" class="list-group" style="max-height: 400px; overflow-y: auto;"></ul>
               </div>
             
             </div>
@@ -250,7 +232,7 @@ async function placeOrder(orderDirection) {
       const symbol = localStorage.getItem('symbol')
       if (symbol) {
         changeTradingViewSymbol(symbol)
-    }
+      }
     }  
   }
   )
@@ -259,13 +241,13 @@ async function placeOrder(orderDirection) {
   const fetchCryptosBtn = document.getElementById('fetchCryptos')
   const input = document.getElementById('crypto-search')
   
-  function changeTradingViewSymbol(newSymbol) {
+  function changeTradingViewSymbol(newSymbol, exchange = "KRAKEN") {
     // check if it is in valid format (without :)
     if (newSymbol.includes(':')) {
         newSymbol = newSymbol.replace(':', '');
     }
     if (window.tvWidget) {
-      window.tvWidget.handleSymbolChange(newSymbol);
+      window.tvWidget.handleSymbolChange(newSymbol, exchange);
       window.get_historical_data(newSymbol)
     } else {
       console.error('TradingView widget instance not found');
@@ -274,20 +256,25 @@ async function placeOrder(orderDirection) {
 
 
     async function getCryptos() {
-        // get cryptos 
-      const res = await fetch(`{{url_for('routes.get_cryptos')}}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          trading_mode: localStorage.getItem("method"),
-          exchange_name: localStorage.getItem("method"),
-        }),
-      })
+        // get cryptos
+      try {
+        console.log(`{{url_for('trading.get_cryptos')}}`)
+        const res = await fetch(`{{url_for('trading.get_cryptos')}}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            trading_mode: localStorage.getItem("method"),
+            exchange_name: localStorage.getItem("method"),
+          }),
+        })
 
-      const json = await res.json()
-      return json.cryptos
+        const json = await res.json()
+        return json.cryptos
+      }catch(err) {
+        return;
+      }
     }
 
     async function updateCryptoList(cryptoSymbol) {
@@ -298,13 +285,11 @@ async function placeOrder(orderDirection) {
       
       cryptos.forEach(crypto => {
         const li = document.createElement('li')
-        li.classList.add('flex', 'justify-between', 'mb-2')
+        li.classList.add('flex', 'justify-between', 'mb-2', 'list-group-item', 'list-group-item-action', 'cursor-pointer')
         const span = document.createElement('span')
-        const spanPrice = document.createElement('span')
         const spanExchangeType = document.createElement('span')
 
-        span.textContent = crypto.symbol
-        spanPrice.textContent = crypto.price
+        span.textContent = `${crypto.symbol} (${crypto.price})`
 
         li.addEventListener('click', () => {
           changeTradingViewSymbol(crypto.symbol)
@@ -315,7 +300,6 @@ async function placeOrder(orderDirection) {
         })
 
         li.appendChild(span)
-        li.appendChild(spanPrice)
         cryptoList.appendChild(li)
 
         

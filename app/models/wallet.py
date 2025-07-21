@@ -82,7 +82,7 @@ def get_found_wallets_by_user(user_id: str, exchange: str = None):
                 return []
     return []
 
-def get_balance_by_currency(user_id: str, currency: str, exchange: str = None):
+def get_balance_by_currency(user_id: str, currency: str, exchange: str = None) -> float:
     """
     Gets the balance for a specific currency for a specific user, optionally filtered by exchange.
     """

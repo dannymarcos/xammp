@@ -8,3 +8,7 @@ db = SQLAlchemy()
 from .users import User
 from .trades import Trade
 from .strategies import Strategy
+from .transaction_wallet import FoundWallet
+from .wallet import WalletBD
+from .performance_aegis import PerformanceAegis
+from .referral_earnings import ReferralEarnings

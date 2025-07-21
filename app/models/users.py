@@ -24,6 +24,7 @@ class User(db.Model, UserMixin):  # Inherit from UserMixin
     kraken_api_key = db.Column(db.String(255), default=KRAKEN_API_KEY) # TODOL REMOVE
     kraken_api_secret = db.Column(db.String(255), default=KRAKEN_API_SECRET) # TODOL REMOVE
     last_error_message = db.Column(db.String(255), default="")
+    referred_by = db.Column(db.String(36), db.ForeignKey('users.id'), nullable=True)
     role = db.Column(db.String(16), nullable=False, default="user")
 
     def set_password(self, password):
@@ -70,4 +71,50 @@ def add_last_error_message(user_id, message):
                     raise
         except Exception:
             traceback.print_exc()
-    
+
+def get_referred_by_user(user_id):
+    try:
+        user = User.query.filter_by(id=user_id).first()
+        if user and user.referred_by:
+            return User.query.filter_by(id=user.referred_by).first()
+        return None
+    except Exception as e:
+        traceback.print_exc()
+        return None
+
+def get_users_registered() -> float:
+    try:
+        from main import app_instance
+        app = app_instance
+        
+        if app and hasattr(app, 'app_context'):
+            with app.app_context():
+                count = User.query.count()
+                return float(count)
+        else:
+            count = User.query.count()
+            return float(count)
+    except Exception as e:
+        print(f"Error getting users count: {e}")
+        return 0.0
+
+def get_user_referrals(user_id: str):
+    """Get all users referred by a specific user"""
+    try:
+        return User.query.filter_by(referred_by=user_id).all()
+    except Exception as e:
+        print(f"Error getting user referrals: {e}")
+        return []
+
+def get_user_referrer(user_id: str):
+    """Get the user who referred a specific user"""
+    try:
+        user = User.query.filter_by(id=user_id).first()
+        if user and user.referred_by:
+            return User.query.filter_by(id=user.referred_by).first()
+        return None
+    except Exception as e:
+        print(f"Error getting user referrer: {e}")
+        return None
+
+

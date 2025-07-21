@@ -4,6 +4,9 @@ import logging
 from functools import wraps
 from datetime import datetime
 
+from app.models.performance_aegis import get_balance_aegis
+from app.models.users import get_users_registered
+from app.models.transaction_wallet import get_deposits_pending, get_withdrawals_pending
 from app.viewmodels.wallet.found import WalletAdmin
 
 admin_bp = Blueprint('admin', __name__)
@@ -45,7 +48,25 @@ def admin_verify_transaction():
 
     print(data)
 
-    wallet.add_found(data.user_id, data.amount, data.currency, "general")
+    if data:
+        wallet.add_found(data.user_id, data.amount, data.currency, "general")
+    return jsonify({"success": is_valid})
+
+@admin_bp.route("/admin/process-withdrawal", methods=["POST"])
+@login_required
+@admin_required
+def admin_process_withdrawal():
+    """Admin process withdrawal route"""
+    data = request.get_json()
+    id = data.get("transaction_id")
+    tx_hash = data.get("tx_hash")
+
+    if not tx_hash:
+        return jsonify({"success": False, "message": "Transaction hash is required"})
+
+    # Mark as verified and store the TX hash
+    is_valid = wallet.set_verification_with_tx_hash(id, True, tx_hash)
+    
     return jsonify({"success": is_valid})
 
 @admin_bp.route("/admin/real-balances", methods=["GET"])
@@ -66,6 +87,26 @@ def get_real_master_balances():
             "success": False,
             "error": str(e)
         }), 500
+
+@admin_bp.route("/admin/general-info", methods=["POST"])
+@login_required
+@admin_required
+def get_general_info():
+    aegis_balance = get_balance_aegis()
+    users_registered = get_users_registered()
+    deposits_pending = get_deposits_pending()
+    withdrawals_pending = get_withdrawals_pending()
+
+    return jsonify({
+        "success": True,
+        "data": {
+            "aegis_balance": aegis_balance,
+            "users_registered": users_registered,
+            "deposits_pending": deposits_pending,
+            "withdrawals_pending": withdrawals_pending
+        },
+        "timestamp": datetime.now().isoformat()
+    })
 
 @admin_bp.route("/admin/real-balances-summary", methods=["GET"])
 @login_required

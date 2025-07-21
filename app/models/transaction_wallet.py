@@ -16,6 +16,9 @@ class FoundWallet(db.Model):
     verification = db.Column(db.Boolean, nullable=False, default=False)
     red = db.Column(db.String(255), nullable=False)
     transaction_type = db.Column(db.String(50), nullable=False)  # 'deposit' or 'withdrawal'
+    tx_hash = db.Column(db.String(255), nullable=True)  # Transaction hash for processed withdrawals
+    capital_part = db.Column(db.Float, nullable=True)  # Parte de capital en retiros
+    x = db.Column(db.Boolean, nullable=False, default=False)
 
     @property
     def serialize(self):
@@ -29,9 +32,11 @@ class FoundWallet(db.Model):
         db.session.add(self)
         db.session.commit()
 
-def create_found_wallet(user_id: str, amount: float, currency: str, ref: str, red: str, transaction_type: str):
+def create_found_wallet(user_id: str, amount: float, currency: str, ref: str, red: str, 
+                        transaction_type: str, x: bool, verification: bool = False,
+                        capital_part: float = None):
     """
-    Creates a new found wallet entry.
+    Creates a new found wallet entry with capital_part support.
     """
     from main import app_instance
     app = app_instance
@@ -48,7 +53,10 @@ def create_found_wallet(user_id: str, amount: float, currency: str, ref: str, re
                     currency=currency,
                     ref=ref,
                     red=red,
-                    transaction_type=transaction_type
+                    transaction_type=transaction_type,
+                    x=x,
+                    verification=verification,
+                    capital_part=capital_part  # Nuevo campo
                 )
                 db.session.add(found_wallet)
                 db.session.commit()
@@ -114,3 +122,47 @@ def delete_found_wallet(wallet_id: str):
                 print(f"Error deleting found wallet {wallet_id}: {e}")
                 return False
     return False 
+
+def get_deposits_pending() -> float:
+    """
+    Get the total count of pending deposits (unverified deposit transactions)
+    Returns:
+        float: Total number of pending deposits
+    """
+    try:
+        from main import app_instance
+        app = app_instance
+        
+        if app and hasattr(app, 'app_context'):
+            with app.app_context():
+                count = FoundWallet.query.filter_by(
+                    transaction_type="deposit",
+                    verification=False,
+                ).count()
+                return float(count)
+        return 0.0
+    except Exception as e:
+        print(f"Error getting pending deposits count: {e}")
+        return 0.0 
+
+def get_withdrawals_pending() -> float:
+    """
+    Get the total count of pending withdrawals (unverified withdrawal transactions)
+    Returns:
+        float: Total number of pending withdrawals
+    """
+    try:
+        from main import app_instance
+        app = app_instance
+        
+        if app and hasattr(app, 'app_context'):
+            with app.app_context():
+                count = FoundWallet.query.filter_by(
+                    transaction_type="withdrawal",
+                    verification=False,
+                ).count()
+                return float(count)
+        return 0.0
+    except Exception as e:
+        print(f"Error getting pending withdrawals count: {e}")
+        return 0.0 

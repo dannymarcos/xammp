@@ -1,3 +1,4 @@
+import json
 import logging
 import traceback
 from datetime import datetime
@@ -133,11 +134,13 @@ class KrakenFuturesExchange(KrakenExchange):
                     params=params
                 )
 
+            print(json.dumps(order, indent=4))
+
             # Prepare order record
             order_record = {
                 "order_type": order_type,
                 "order_direction": order_direction,
-                "volume": volume,
+                "volume": float(volume),
                 "symbol": symbol,
                 "price": order.get("price"),
                 "by": order_made_by,
@@ -148,6 +151,20 @@ class KrakenFuturesExchange(KrakenExchange):
                 "exchange": "kraken-futures",
             }
 
+            amount = float(volume) # BTC
+            cost = float(order.get("cost")) # USDT
+            price = float(order.get("price")) # USDT/BTC
+            fees = abs(amount - (cost/price)) # BTC - (USDT/(USDT/BTC))
+            # fees lo obtengo en cripto no en USDT
+
+            print("amount:", amount)
+            print("cost:", cost)
+            print("price:", price)
+            print("fees:", fees)
+
+            if order_direction == "buy":
+                order_record["volume"] = amount - fees
+
             # Save to database
             if not self.add_order_to_db(order_record):
                 logger.error("Failed to save order to database")
@@ -155,12 +172,12 @@ class KrakenFuturesExchange(KrakenExchange):
 
             # Reset leverage
             self.exchange.set_leverage(1, symbol)
-            return order, None
+            return order, fees, price, None
 
         except Exception as e:
             logger.error(f"Order placement error: {e}")
             traceback.print_exc()
-            return None, str(e)
+            return None, None, None, str(e)
 
     def fetch_ohlcv_optimized(self, symbol, timeframe, limit=5):
         """Fetch optimized OHLCV data for LLM processing."""

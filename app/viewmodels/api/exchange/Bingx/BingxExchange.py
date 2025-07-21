@@ -1,6 +1,7 @@
 """BingxExchange module provides an interface to interact with the BingX exchange using ccxt."""
 
 import json
+from time import sleep
 import traceback
 from datetime import datetime
 
@@ -148,7 +149,7 @@ class BingxExchange(Exchange):
         order_to_save = {
             "order_type": order_type,
             "order_direction": order_direction,
-            "volume": volume,
+            "volume": float(order.get("amount")),
             "symbol": symbol,
             "price": order.get("price"),
             "by": order_made_by,
@@ -166,6 +167,22 @@ class BingxExchange(Exchange):
             "trading_mode": self.trading_mode,
         }
 
+        fees = 0.0
+        fees_currency = ""
+
+        price = float(order.get("price"))
+
+        while True:
+            fees, fees_currency = self.get_fees(order.get("id"), order.get("symbol"))
+            if fees is not None:
+                break
+            sleep(5)
+
+        cost = order["cost"]
+
+        if order_direction == "buy":
+            order_to_save["volume"] -= fees / price
+
         order_saved = self.add_order_to_db(order_to_save)
         if not order_saved:
             return {"error": "Error saving order to database"}, 500
@@ -173,7 +190,8 @@ class BingxExchange(Exchange):
         print(
             f":white_check_mark: Order saved to database: {json.dumps(order, indent=4)}"
         )
-        return order_saved, 200
+
+        return order_saved, fees, price, cost, fees_currency, 200
 
     def get_symbol_price(self, symbol):
         # Validate symbol before making API call
@@ -354,3 +372,26 @@ class BingxExchange(Exchange):
                 continue
         
         return prices
+
+    def get_fees(self, order_id, symbol):
+        """
+        args: order_id, symbol
+        """
+        try:
+            order = self.exchange.fetch_order(order_id, symbol)
+            fees = order.get('fees', [])
+
+            fee_amount = 0.0
+            fee_currency = "UNKNOWN"
+
+            if fees:
+                for fee in fees:
+                    currency = fee.get('currency', 'UNKNOWN')
+                    cost = float(fee['cost']) if fee.get('cost') is not None else 0.0
+                    fee_amount += cost
+                    fee_currency = currency
+            
+            return fee_amount, fee_currency
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            return None, None

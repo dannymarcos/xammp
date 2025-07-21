@@ -199,7 +199,7 @@ export class TradingBot {
 			const config = this.getBotConfig();
 			if (!config) return;
 
-      console.info(`Starting trading bot ${this.botId} with config:`, config);
+			console.info(`Starting trading bot ${this.botId} with config:`, config);
 
 			const response = await fetch("/bot/start_bot_trading", {
 				method: "POST",
@@ -410,7 +410,7 @@ export class TradingBot {
 									trade.price ? parseFloat(trade.price).toFixed(2) : "0.00"
 								}</td>
                 <td class="text-end">${
-									trade.volume ? parseFloat(trade.volume).toFixed(4) : "0.0000"
+									trade.volume ? parseFloat(trade.volume).toFixed(8) : "0.00000000"
 								}</td>
                 <td class="text-end ${
 									trade.status === "closed" ? "text-gray" : "text-success"

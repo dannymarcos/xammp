@@ -96,6 +96,12 @@
 						<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal" id="fund_wallet_button" {{ "disabled" if pending_balance > 0 else "" }}>
 							Fund wallet
 						</button>
+						
+						<span id="withdrawal_button_container">
+							<button type="button" class="btn btn-success ms-2" data-bs-toggle="modal" data-bs-target="#withdrawalModal" id="withdrawal_button" {{ "disabled" if disabled_withdraw or pending_withdrawal_balance or pending_balance else "" }}>
+								Withdraw
+							</button>
+						</span>
 					</div>
 						
 					<p>Console Log: Wallet Balance and Fund Wallet</p>
@@ -108,34 +114,34 @@
 		<div class="col-md-3">
 			<div class="card bg-primary text-white mb-3">
 				<div class="card-body">
-					<h5 class="card-title">Capital Inicial</h5>
+					<h5 class="card-title">Initial Capital</h5>
 					<h3>{{ "%.2f"|format(initial_capital) }} USDT</h3>
-					<p>Último fondeo de la cuenta</p>
+					<p>Last account funding</p>
 				</div>
 			</div>
 		</div>
 		<div class="col-md-3">
 			<div class="card bg-success text-white mb-3">
 				<div class="card-body">
-					<h5 class="card-title">Ganancias Totales</h5>
+					<h5 class="card-title">Total Gains</h5>
 					<h3>{{ "%.2f"|format(performance.total_gains) }} USDT</h3>
-					<p>Ganancias acumuladas</p>
+					<p>Accumulated gains</p>
 				</div>
 			</div>
 		</div>
 		<div class="col-md-3">
 			<div class="card bg-danger text-white mb-3">
 				<div class="card-body">
-					<h5 class="card-title">Pérdidas Totales</h5>
+					<h5 class="card-title">Total Losses</h5>
 					<h3>{{ "%.2f"|format(performance.total_losses) }} USDT</h3>
-					<p>Pérdidas acumuladas</p>
+					<p>Accumulated losses</p>
 				</div>
 			</div>
 		</div>
 		<div class="col-md-3">
 			<div class="card {% if performance.net_performance >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white mb-3">
 				<div class="card-body">
-					<h5 class="card-title">Rendimiento Neto</h5>
+					<h5 class="card-title">Net Performance</h5>
 					<h3>{{ "%.2f"|format(performance.net_performance) }} USDT</h3>
 					<p>{{ "%.2f"|format(performance.performance_percentage) }}%</p>
 				</div>
@@ -144,9 +150,42 @@
 		<div class="col-md-3">
 			<div class="card bg-primary text-white mb-3">
 				<div class="card-body">
-					<h5 class="card-title">Saldo Pendiente</h5>
+					<h5 class="card-title">Pending Balance</h5>
 					<h3>{{ "%.2f"|format(pending_balance) }} USDT</h3>
-					<p>Transacciones sin verificar</p>
+					<p>Unverified transactions</p>
+				</div>
+			</div>
+		</div>
+		<div class="col-md-3">
+			<div class="card bg-primary text-white mb-3">
+				<div class="card-body">
+					<h5 class="card-title">Pending Withdrawals</h5>
+					<h3>{{ "%.2f"|format(pending_withdrawal_balance) }} USDT</h3>
+					<p>Withdrawal requests in process</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Transaction History Section -->
+	<div class="row mt-4">
+		<div class="col-md-12">
+			<div class="card mb-3">
+				<div class="card-header d-flex justify-content-between align-items-center">
+					<h5 class="card-title mb-0">Transaction History</h5>
+					<button class="btn btn-sm btn-outline-primary" onclick="refreshTransactionHistory()">
+						<i class="fas fa-sync-alt"></i> Refresh
+					</button>
+				</div>
+				<div class="card-body">
+					<div id="transactionHistoryContainer">
+						<div class="text-center py-4">
+							<div class="spinner-border text-primary" role="status">
+								<span class="sr-only">Loading...</span>
+							</div>
+							<p class="mt-2">Loading transaction history...</p>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -159,66 +198,6 @@
 					<h5 class="card-title">Earnings vs Losses</h5>
 					<canvas id="earningsChart" width="400" height="200"></canvas>
 					<p>Console Log: Earnings vs Losses Chart</p>
-				</div>
-			</div>
-		</div>
-		<div class="col-md-4">
-			<div class="card mb-3">
-				<div class="card-body">
-					<h5 class="card-title">Recent Transactions</h5>
-					<ul class="list-group list-group-flush">
-						<li class="list-group-item d-flex justify-content-between align-items-center">
-							<div>
-								<i class="fas fa-arrow-up text-success"></i>
-								28 Nov
-							</div>
-							<span class="text-success">+12,098.00</span>
-							<a href="#" onclick="console.log('See Blockchain 1');">See Blockchain</a>
-						</li>
-						<li class="list-group-item d-flex justify-content-between align-items-center">
-							<div>
-								<i class="fas fa-arrow-down text-danger"></i>
-								27 Nov
-							</div>
-							<span class="text-danger">-9,066.00</span>
-							<a href="#" onclick="console.log('See Blockchain 2');">See Blockchain</a>
-						</li>
-						<li class="list-group-item d-flex justify-content-between align-items-center">
-							<div>
-								<i class="fas fa-arrow-up text-success"></i>
-								26 Nov
-							</div>
-							<span class="text-success">+12,098.00</span>
-							<a href="#" onclick="console.log('See Blockchain 3');">See Blockchain</a>
-						</li>
-						<li class="list-group-item d-flex justify-content-between align-items-center">
-							<div>
-								<i class="fas fa-arrow-up text-success"></i>
-								25 Nov
-							</div>
-							<span class="text-success">+12,098.00</span>
-							<a href="#" onclick="console.log('See Blockchain 4');">See Blockchain</a>
-						</li>
-						<li class="list-group-item d-flex justify-content-between align-items-center">
-							<div>
-								<i class="fas fa-arrow-down text-danger"></i>
-								24 Nov
-							</div>
-							<span class="text-danger">-9,066.00</span>
-							<a href="#" onclick="console.log('See Blockchain 5');">See Blockchain</a>
-						</li>
-						<li class="list-group-item d-flex justify-content-between align-items-center">
-							<div>
-								<i class="fas fa-arrow-down text-danger"></i>
-								23 Nov
-							</div>
-							<span class="text-danger">-9,066.00</span>
-							<a href="#" onclick="console.log('See Blockchain 6');">See Blockchain</a>
-						</li>
-					</ul>
-					<button class="btn btn-primary mt-3" onclick="console.log('Go To Blockchain');">
-						Go To Blockchain
-					</button>
 				</div>
 			</div>
 		</div>
@@ -249,6 +228,49 @@
 				</button>
 				<button type="button" class="btn btn-primary" id="submitTransaction">
 					Yes, i do page
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Withdrawal Modal -->
+<div class="modal fade" id="withdrawalModal" tabindex="-1" aria-labelledby="withdrawalModalLabel" aria-hidden="true">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<h5 class="modal-title" id="withdrawalModalLabel">Withdraw Funds</h5>
+				<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+			</div>
+			<div class="modal-body">
+				<div class="form-group">
+					<label for="withdrawalAmount">Amount:</label>
+					<input type="number" class="form-control" id="withdrawalAmount" step="0.000001" />
+					<label for="withdrawalSymbol">Currency:</label>
+					<select class="form-control" id="withdrawalSymbol">
+						{% if balance_general %}
+							{% for item in balance_general %}
+								<option value="{{ item.currency }}">{{ item.currency }}</option>
+							{% endfor %}
+						{% else %}
+							<option value="USDT">USDT</option>
+						{% endif %}
+					</select>
+					<label for="withdrawalAddress">Wallet Address:</label>
+					<input type="text" class="form-control" id="withdrawalAddress" placeholder="Enter your wallet address" />
+					<label for="withdrawalNetwork">Network:</label>
+					<div class="d-flex">
+						<img src="static/svg/binance.svg" width="40" height="40" class="ml-bep-20" />
+						<input class="form-control ml-bep-20" id="withdrawalNetwork" value="BEP-20" disabled>
+					</div>
+				</div>
+			</div>
+			<div class="modal-footer">
+				<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+					Close
+				</button>
+				<button type="button" class="btn btn-success" id="submitWithdrawal">
+					Submit Withdrawal
 				</button>
 			</div>
 		</div>
@@ -339,7 +361,7 @@
 		}
 
 		// Load funding transactions by exchange
-		loadTransactionsByExchange();
+		// loadTransactionsByExchange();
 
 		// Chart.js code - fetch data from API
 		const ctx = document.getElementById("earningsChart");
@@ -420,26 +442,23 @@
 					});
 				});
 		}
-	});
 
-	// Function to load and display transactions by exchange
-	function loadTransactionsByExchange() {
-		const container = document.getElementById('transactionsByExchange');
-		
-		fetch('/get_found_wallets_by_exchange')
-			.then(response => response.json())
-			.then(data => {
-				if (data.success) {
-					displayTransactionsByExchange(data.transactions_by_exchange);
-				} else {
-					container.innerHTML = '<div class="alert alert-danger">Error loading transactions</div>';
-				}
-			})
-			.catch(error => {
-				console.error('Error fetching transactions:', error);
-				container.innerHTML = '<div class="alert alert-danger">Error loading transactions</div>';
-			});
-	}
+
+
+		const bnt_withdrawal = document.getElementById('withdrawal_button_container');
+
+		bnt_withdrawal.addEventListener("click", () => {
+			if(!document.getElementById('withdrawal_button').disabled) return
+
+			{% if disabled_withdraw %}
+				const msg = "You can only withdraw 15 days after a deposit"
+			{% else %}
+				const msg = "You have a pending recall order"
+			{% endif %}
+
+			alert(msg);
+		})
+	});
 
 	// Function to display transactions grouped by exchange
 	function displayTransactionsByExchange(transactionsByExchange) {
@@ -526,9 +545,6 @@
 		container.innerHTML = html;
 	}
 
-	// Load transactions by exchange when page loads
-	loadTransactionsByExchange();
-
 	const submitTransaction = () => {
 		const amount = document.getElementById('transactionAmount').value;
 		const transactionId = document.getElementById('transactionId').value;
@@ -555,9 +571,8 @@
 				if (modal) {
 					modal.hide();
 				}
-				// Reload transactions
-				loadTransactionsByExchange();
 
+				document.getElementById('withdrawal_button').disabled = true;
 				document.getElementById('fund_wallet_button').disabled = true;
 			} else {
 				alert('Error: ' + (data.error || 'Failed to submit transaction'));
@@ -570,5 +585,309 @@
 	}
 
 	document.getElementById('submitTransaction').addEventListener('click', submitTransaction);
+
+	// Withdrawal functionality
+	const submitWithdrawal = () => {
+		const btnSubmitWithdrawal = document.getElementById('submitWithdrawal');
+		btnSubmitWithdrawal.disabled = true;
+
+		const amount = document.getElementById('withdrawalAmount').value;
+		const symbol = document.getElementById('withdrawalSymbol').value;
+		const address = document.getElementById('withdrawalAddress').value;
+		const network = document.getElementById('withdrawalNetwork').value;
+
+		if (!amount || !address) {
+			alert('Please fill in both Amount and Wallet Address fields');
+			btnSubmitWithdrawal.disabled = false;
+
+			return;
+		}
+
+		const formData = new FormData();
+		formData.append('amount', amount);
+		formData.append('symbol', symbol);
+		formData.append('ref', address);
+		formData.append('red', network);
+
+		fetch('/withdrawal_request', {
+			method: 'POST',
+			body: formData
+		})
+		.then(response => response.json())
+		.then(data => {
+			if (data.success) {
+				alert('Withdrawal request submitted successfully!');
+				// Close modal
+				const modal = bootstrap.Modal.getInstance(document.getElementById('withdrawalModal'));
+				if (modal) {
+					modal.hide();
+				}
+				// Reload history
+				loadTransactionHistory();
+
+				document.getElementById('withdrawal_button').disabled = true;
+			} else {
+				if (data.withdrawal_locked) {
+					alert('Withdrawals are only allowed 15 days after your last deposit or withdrawal. Please wait ' + data.days_remaining + ' more day(s).');
+
+					document.getElementById('withdrawal_button').disabled = true;
+				}
+				else {
+					alert('Error: ' + (data.error || 'Failed to submit withdrawal request'));
+				}
+				btnSubmitWithdrawal.disabled = false;
+			}
+		})
+		.catch(error => {
+			console.error('Error:', error);
+			alert('Error submitting withdrawal request. Please try again.');
+			btnSubmitWithdrawal.disabled = false;
+		});
+	}
+
+	document.getElementById('submitWithdrawal').addEventListener('click', submitWithdrawal);
+
+	// Transaction History Functions
+	let currentPage = 1;
+	let totalPages = 1;
+
+	const loadTransactionHistory = async(page = 1) => {
+		const container = document.getElementById('transactionHistoryContainer');
+		container.innerHTML = `
+		<div class="text-center py-4">
+			<div class="spinner-border text-primary" role="status">
+				<span class="sr-only">Loading...</span>
+			</div>
+			<p class="mt-2">Loading transaction history...</p>
+		</div>
+		`;
+		
+		try {
+			const response = await fetch(`/get_transaction_history?page=${page}&per_page=10`, {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json',
+				}
+			});
+			
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+			
+			const data = await response.json();
+			
+			if (data.success) {
+				currentPage = data.pagination.current_page;
+				totalPages = data.pagination.total_pages;
+				renderTransactionHistory(data.transactions, data.pagination);
+			} else {
+				throw new Error(data.error || 'Failed to load transaction history');
+			}
+			
+		} catch (error) {
+			console.error('Error loading transaction history:', error);
+			container.innerHTML = `
+				<div class="alert alert-danger">
+					<strong>Error:</strong> Failed to load transaction history: ${error.message}
+				</div>
+			`;
+		}
+	}
+
+	const renderTransactionHistory = (transactions, pagination) => {
+		const container = document.getElementById('transactionHistoryContainer');
+		
+		if (!transactions || transactions.length === 0) {
+			container.innerHTML = `
+				<div class="text-center py-4">
+					<p class="text-muted">No transaction history found.</p>
+				</div>
+			`;
+			return;
+		}
+
+		let html = `
+			<div class="table-responsive">
+				<table class="table table-striped">
+					<thead>
+						<tr>
+							<th>Date</th>
+							<th>Type</th>
+							<th>Amount</th>
+							<th>Currency</th>
+							<th>Network</th>
+							<th>Reference</th>
+							<th>Status</th>
+							<th>TX Hash</th>
+						</tr>
+					</thead>
+					<tbody>
+		`;
+
+		transactions.forEach(transaction => {
+			const isDeposit = transaction.type === 'deposit';
+			const amountClass = isDeposit ? 'text-success' : 'text-danger';
+			const amountPrefix = isDeposit ? '+' : '-';
+			const typeIcon = isDeposit ? 'fa-arrow-down' : 'fa-arrow-up';
+			const typeClass = isDeposit ? 'text-success' : 'text-danger';
+			
+			// Status styling
+			let statusClass, statusIcon;
+			if (transaction.status === 'Verified' || transaction.status === 'Processed') {
+				statusClass = 'text-success';
+				statusIcon = 'fa-check-circle';
+			} else {
+				statusClass = 'text-warning';
+				statusIcon = 'fa-clock';
+			}
+			
+			html += `
+				<tr>
+					<td>${transaction.formatted_time}</td>
+					<td>
+						<i class="fas ${typeIcon} ${typeClass}"></i>
+						<span class="${typeClass}">${transaction.type.charAt(0).toUpperCase() + transaction.type.slice(1)}</span>
+					</td>
+					<td class="${amountClass}">${amountPrefix}${parseFloat(transaction.amount).toFixed(6)}</td>
+					<td>${transaction.currency}</td>
+					<td><span class="badge bg-secondary">${transaction.network}</span></td>
+					<td><small class="text-muted font-mono">${transaction.reference}</small></td>
+					<td>
+						<i class="fas ${statusIcon} ${statusClass}"></i>
+						<span class="${statusClass}">${transaction.status}</span>
+					</td>
+					<td>
+			`;
+			
+			if (transaction.tx_hash) {
+				html += `
+					<span onclick="copyToClipboard('${transaction.tx_hash}')" title="Click to copy TX Hash">
+						<span class="text-sm font-mono tx">${transaction.tx_hash.substring(0, 10)}...</span>
+					</span>
+				`;
+			} else {
+				html += `<span class="text-muted text-sm">-</span>`;
+			}
+			
+			html += `
+					</td>
+				</tr>
+			`;
+		});
+
+		html += `
+					</tbody>
+				</table>
+			</div>
+		`;
+
+		// Add pagination controls
+		if (pagination && pagination.total_pages > 1) {
+			html += renderPaginationControls(pagination);
+		}
+
+		container.innerHTML = html;
+	}
+
+	const renderPaginationControls = (pagination) => {
+		let html = `
+			<div class="d-flex justify-content-between align-items-center mt-3">
+				<div class="text-muted">
+					Showing page ${pagination.current_page} of ${pagination.total_pages} 
+					(${pagination.total_items} total transactions)
+				</div>
+				<nav aria-label="Transaction history pagination">
+					<ul class="pagination pagination-sm mb-0">
+		`;
+
+		// Previous button
+		if (pagination.has_prev) {
+			html += `
+				<li class="page-item">
+					<a class="page-link" href="#" onclick="loadTransactionHistory(${pagination.prev_num}); return false;">
+						<i class="fas fa-chevron-left"></i> Previous
+					</a>
+				</li>
+			`;
+		} else {
+			html += `
+				<li class="page-item disabled">
+					<span class="page-link">
+						<i class="fas fa-chevron-left"></i> Previous
+					</span>
+				</li>
+			`;
+		}
+
+		// Page numbers
+		const startPage = Math.max(1, pagination.current_page - 2);
+		const endPage = Math.min(pagination.total_pages, pagination.current_page + 2);
+
+		for (let i = startPage; i <= endPage; i++) {
+			if (i === pagination.current_page) {
+				html += `
+					<li class="page-item active">
+						<span class="page-link">${i}</span>
+					</li>
+				`;
+			} else {
+				html += `
+					<li class="page-item">
+						<a class="page-link" href="#" onclick="loadTransactionHistory(${i}); return false;">${i}</a>
+					</li>
+				`;
+			}
+		}
+
+		// Next button
+		if (pagination.has_next) {
+			html += `
+				<li class="page-item">
+					<a class="page-link" href="#" onclick="loadTransactionHistory(${pagination.next_num}); return false;">
+						Next <i class="fas fa-chevron-right"></i>
+					</a>
+				</li>
+			`;
+		} else {
+			html += `
+				<li class="page-item disabled">
+					<span class="page-link">
+						Next <i class="fas fa-chevron-right"></i>
+					</span>
+				</li>
+			`;
+		}
+
+		html += `
+					</ul>
+				</nav>
+			</div>
+		`;
+
+		return html;
+	}
+
+	const refreshTransactionHistory = () => {
+		loadTransactionHistory(1); // Reset to first page
+	}
+
+	const copyToClipboard = (text) => {
+		navigator.clipboard.writeText(text).then(() => {
+			alert('TX Hash copied to clipboard!');
+		}).catch(err => {
+			console.error('Failed to copy: ', err);
+			// Fallback for older browsers
+			const textArea = document.createElement('textarea');
+			textArea.value = text;
+			document.body.appendChild(textArea);
+			textArea.select();
+			document.execCommand('copy');
+			document.body.removeChild(textArea);
+			alert('TX Hash copied to clipboard!');
+		});
+	}
+	
+	// Load transaction history when page loads
+	loadTransactionHistory(1);
 </script>
 {% endblock %}

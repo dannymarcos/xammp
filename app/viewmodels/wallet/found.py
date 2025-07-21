@@ -1,7 +1,3 @@
-import os
-
-import requests
-from app.viewmodels.api.spot.KrakenSpotApiGetAccountBalance import KrakenSpotApiGetAccountBalance
 from app.viewmodels.api.exchange.Kraken.KrakenAPIFutures import KrakenFuturesExchange
 from app.viewmodels.api.exchange.Bingx.BingxExchange import BingxExchange
 from app.viewmodels.api.exchange.Kraken.KrakenSpotExchange import KrakenSpotExchange
@@ -9,11 +5,11 @@ from app.models.transaction_wallet import FoundWallet, create_found_wallet
 from app.models.wallet import add_found_wallet, get_balance_by_currency, get_found_wallets_by_user
 from app.models.trades import Trade
 from app.models.users import User
+from app.models.performance_aegis import PerformanceAegis
 from app.viewmodels.api.exchange.Exchange import ExchangeFactory
 from app.config import config
 from datetime import datetime, timedelta
 import threading
-
 
 def get_crypto_price_in_usdt(currency: str, exchange_name: str) -> float:
     """
@@ -88,27 +84,66 @@ class Wallet:
         self.user_id = user_id
 
     def get_found_wallets(self, exchange: str = "general"):
-        resultQuery = FoundWallet.query.filter_by(user_id=self.user_id).all ()
+        resultQuery = FoundWallet.query.filter_by(user_id=self.user_id).all()
         founds = [f.serialize for f in resultQuery]
 
         return founds
 
-    def deposit_found_wallet(self, amount: float, currency: str, ref: str, red: str, exchange: str = "general"):
-        result = create_found_wallet(self.user_id, amount, currency, ref, red, "deposit");
+    def deposit_found_wallet(self, amount: float, currency: str, ref: str, red: str, exchange: str = "general", x: bool = False, verification: bool = False):
+        result = create_found_wallet(self.user_id, amount, currency, ref, red, "deposit", x, verification);
 
         if result is None:
             return False
         
         return True
 
-    def withdrawal_found_wallet(self, amount: float, currency: str, ref: str, red: str, exchange: str = "general"):
-        result = create_found_wallet(self.user_id, amount, currency, ref, red, "withdrawal");
+
+    def withdrawal_found_wallet(self, amount: float, currency: str, ref: str, red: str, exchange: str = "general", x: bool = False, verification: bool = False, capital_part: float = None):
+        # Pasar capital_part a create_found_wallet
+        result = create_found_wallet(
+            self.user_id, 
+            amount, 
+            currency, 
+            ref, 
+            red, 
+            "withdrawal", 
+            x, 
+            verification,
+            capital_part=capital_part
+        )
 
         if result is None:
             return False
         
         return True
-    
+
+    def get_pending_withdrawals(self):
+        pending_withdrawals = FoundWallet.query.filter_by(
+            user_id=self.user_id, 
+            transaction_type="withdrawal", 
+            verification=False
+        ).all()
+
+        return pending_withdrawals
+
+    def get_pending_withdrawal_balance(self, currency: str = "USDT"):
+        try:
+            # Get all unverified withdrawal transactions for this currency
+            pending_withdrawals = FoundWallet.query.filter_by(
+                user_id=self.user_id, 
+                currency=currency, 
+                transaction_type="withdrawal",
+                verification=False
+            ).all()
+            
+            # Sum all pending withdrawal amounts
+            total_pending = sum(withdrawal.amount for withdrawal in pending_withdrawals)
+            
+            return total_pending
+        except Exception as e:
+            print(f"Error getting pending withdrawal balance: {e}")
+            return 0
+
     def get_balance(self, exchange: str = None):
         return get_found_wallets_by_user(self.user_id, exchange)
     
@@ -418,12 +453,88 @@ class Wallet:
             print(f"Error checking {symbol_compare} balance: {e}")
             return False
 
+
+
+
+    def get_total_deposits(self):
+        """Obtiene solo la suma de los depósitos verificados (sin incluir saldos actuales)"""
+        deposits = FoundWallet.query.filter_by(
+            user_id=self.user_id,
+            verification=True,
+            transaction_type="deposit",
+            x=False
+        ).all()
+        return sum(f.amount for f in deposits)
+    
+    def get_total_withdrawn_capital(self):
+        """Obtiene la suma de todas las partes de capital retiradas"""
+        withdrawals = FoundWallet.query.filter_by(
+            user_id=self.user_id,
+            verification=True,
+            transaction_type="withdrawal"
+        ).all()
+        
+        total_capital = 0.0
+        for w in withdrawals:
+            if w.capital_part is not None:
+                total_capital += w.capital_part
+            else:
+                # Para retiros antiguos sin capital_part, asumimos que son 100% capital
+                total_capital += w.amount
+        return total_capital
+
+    def get_capital_base(self):
+        """Calcula el capital base dinámicamente"""
+        total_deposits = self.get_total_deposits()
+        total_withdrawn_capital = self.get_total_withdrawn_capital()
+        return max(0, total_deposits - total_withdrawn_capital)
+    
+    def get_real_performance(self):
+        """Calcula el rendimiento real considerando todos los exchanges"""
+        exchanges = ["general", "kraken_spot", "kraken_futures", "bingx_spot", "bingx_futures"]
+        amount_total_now = 0.0
+
+        for exchange in exchanges:
+            try:
+                # Obtener todos los balances para este exchange
+                balance_wallets = get_found_wallets_by_user(self.user_id, exchange)
+                
+                for wallet in balance_wallets:
+                    currency = wallet.get("currency")
+                    amount = wallet.get("amount", 0)
+                    
+                    if currency and amount > 0:
+                        # Obtener precio específico para el exchange
+                        price_usdt = get_crypto_price_in_usdt(currency, exchange)
+                        
+                        if price_usdt and price_usdt > 0:
+                            usdt_equivalent = amount * price_usdt
+                            amount_total_now += usdt_equivalent
+                        elif currency.upper() in ["USDT", "USD"]:
+                            # Manejar monedas estables directamente
+                            amount_total_now += amount
+                        else:
+                            print(f"Warning: Could not get USDT price for {currency} on {exchange}")
+                            
+            except Exception as e:
+                print(f"Error getting balance for exchange {exchange}: {e}")
+                continue
+        
+        # Calcular capital base
+        capital_base = self.get_capital_base()
+        
+        # Calcular ganancias disponibles (puede ser negativa si hay pérdidas)
+        available_gain = amount_total_now - capital_base
+        
+        return available_gain, amount_total_now, None
+
+
 class WalletAdmin:
     def __init__(self):
         pass
 
     def get_list_founds(self, page: int):
-        resultQuery = FoundWallet.query.order_by(FoundWallet.time.desc()).paginate(page=page, per_page=50, error_out=False).items
+        resultQuery = FoundWallet.query.filter_by(x=False).order_by(FoundWallet.time.desc()).paginate(page=page, per_page=50, error_out=False).items
         
         # Get serialized data and add user email
         transactions = []
@@ -448,6 +559,27 @@ class WalletAdmin:
             return False
         
         return True
+
+    def set_verification_with_tx_hash(self, id: str, value: bool, tx_hash: str):
+        """
+        Set verification status and store transaction hash for withdrawal processing
+        Args:
+            id: Transaction ID
+            value: Verification status (True/False)
+            tx_hash: Transaction hash from blockchain
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        wallet = FoundWallet.query.filter_by(id=id).first()
+
+        if wallet:
+            wallet.verification = value
+            wallet.tx_hash = tx_hash
+            wallet.save()
+        else:
+            return False
+        
+        return True
     
     def add_found(self, user_id: str, amount: float, currency: str, exchange: str = "general"):
         add_found_wallet(user_id, amount, currency, exchange)
@@ -456,6 +588,47 @@ class WalletAdmin:
         wallet = FoundWallet.query.filter_by(id=id).first()
 
         return wallet
+
+    def deduct_from_wallet(self, user_id: str, amount: float, currency: str, exchange: str = "general"):
+        """
+        Deduct amount from user's wallet balance
+        Args:
+            user_id: The user ID
+            amount: Amount to deduct
+            currency: Currency to deduct
+            exchange: Exchange name (default: "general")
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            from app.models.wallet import WalletBD
+            from app.models.create_db import db
+            
+            # Find the user's wallet for this currency and exchange
+            wallet = WalletBD.query.filter_by(
+                user_id=user_id, 
+                currency=currency, 
+                exchange=exchange
+            ).first()
+            
+            if wallet and wallet.amount >= amount:
+                # Deduct the amount
+                wallet.amount -= amount
+                
+                # If balance becomes zero or negative, delete the wallet entry
+                if wallet.amount <= 0:
+                    db.session.delete(wallet)
+                
+                db.session.commit()
+                return True
+            else:
+                print(f"Insufficient balance for user {user_id}, currency {currency}, exchange {exchange}")
+                return False
+                
+        except Exception as e:
+            print(f"Error deducting from wallet: {e}")
+            db.session.rollback()
+            return False
 
     def get_master_account_balances(self):
         """
@@ -740,3 +913,48 @@ class WalletAdmin:
                 break  # Exit loop since we can't calculate overall total
         
         return summary
+
+    def get_performance_aegis(self):
+        try:
+            performance = PerformanceAegis.query.first()
+            if performance:
+                return performance.serialize()
+            else:
+                # Create initial record if none exists
+                performance = PerformanceAegis(amount=0.0)
+                performance.save()
+                return performance.serialize()
+        except Exception as e:
+            print(f"Error getting performance aegis: {e}")
+            return {"id": None, "amount": 0.0, "date": None}
+
+    def update_performance_aegis(self, amount: float):
+        try:
+            performance = PerformanceAegis.query.get(1)
+            if performance:
+                performance.amount = amount
+                performance.date = datetime.utcnow()
+                performance.update()
+                print(f"✅ Updated PerformanceAegis (ID: 1) to amount: {amount}")
+                return True
+            else:
+                # Create new record with ID 1 if none exists
+                performance = PerformanceAegis()
+                performance.id = 1
+                performance.amount = amount
+                performance.date = datetime.utcnow()
+                performance.save()
+                print(f"✅ Created new PerformanceAegis (ID: 1) with amount: {amount}")
+                return True
+        except Exception as e:
+            print(f"❌ Error updating performance aegis: {e}")
+            return False
+
+    def add_referral_earning(self, user_id: str, referred_user_id: str, amount: float):
+        try:
+            from app.models.referral_earnings import add_referral_earning
+            add_referral_earning(user_id, referred_user_id, amount)
+            return True
+        except Exception as e:
+            print(f"Error adding referral earning: {e}")
+            return False

@@ -78,163 +78,286 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', async function() {
-    async function getSymbolPrice(symbol, exchange) {
-        try {
+(function() {
+    // Configuration for this specific instance
+    const CONFIG = {
+        exchangeName: "{{ exchange_name }}",
+        tradingMode: "{{ trading_mode }}",
+        addOrderUrl: "{{ url_for('trading.add_order') }}"
+    };
+
+    // Global trading order maker manager
+    window.TradingOrderMakerManager = window.TradingOrderMakerManager || {};
+
+    // Initialize the trading order maker for this specific exchange
+    function initializeTradingOrderMaker() {
+        const container = document.getElementById(`trading-order-maker-container-${CONFIG.exchangeName}`);
+        if (!container) {
+            console.warn(`Trading order maker container not found for exchange: ${CONFIG.exchangeName}`);
+            return null;
+        }
+
+        // Get all elements specific to this exchange
+        const buyBtn = container.querySelector(`.buy-btn-${CONFIG.exchangeName}`);
+        const sellBtn = container.querySelector(`.sell-btn-${CONFIG.exchangeName}`);
+        const priceLoadingSpinner = container.querySelector(`#price-loading-spinner-${CONFIG.exchangeName}`);
+        const priceSymbolDisplay = container.querySelector(`.price-symbol-display-${CONFIG.exchangeName}`);
+        const symbolSpans = container.querySelectorAll(`.symbol-${CONFIG.exchangeName}`);
+
+        let currentPrice = 0;
+        let currentSymbol = '';
+        let isInitialized = false;
+
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // Price fetching function
+        async function getSymbolPriceLOCAL(symbol, exchange) {
+            try {
+                const res = await fetch(`/get_symbol_price?symbol=${symbol}&exchange=${exchange}`, {
+                    method: "GET"
+                });
+                const data = await res.json();
+                
+                return { price: data.price, symbol: data.symbol };
+            } catch (error) {
+                return { price: 0, symbol: symbol };
+            }
+        }
+
+        // Fetch and display symbol price
+        async function fetchAndDisplaySymbolPrice() {
+            if (!priceLoadingSpinner) return;
             
-            const res = await fetch(`/get_symbol_price?symbol=${symbol}&exchange=${exchange}`)
-            const data = await res.json()
-            return {price: data.price, symbol: data.symbol}
-        } catch (error) {
-            console.error('Error fetching symbol price:', error);
-            return {price: 0, symbol: symbol};
-        }
-      
-    }
-    // Placeholder for actual price fetching. In a real scenario, this would come from an API.
-    // For now, let's assume a dummy price for calculation.
-    const container = document.getElementById('trading-order-maker-container-{{ exchange_name }}');
-    const buyBtn = container.querySelector('.buy-btn-{{ exchange_name }}');
-    const sellBtn = container.querySelector('.sell-btn-{{ exchange_name }}');
-    const priceLoadingSpinner = container.querySelector(`#price-loading-spinner-{{ exchange_name }}`);
-    const priceSymbolDisplay = container.querySelector(`.price-symbol-display-{{ exchange_name }}`);
-    const symbolSpans = container.querySelectorAll(`.symbol-{{ exchange_name }}`);
+            priceLoadingSpinner.classList.remove('d-none');
+            console.log(`Fetching price for ${CONFIG.exchangeName}...`);
 
-    let currentPrice = 0;
-    let currentSymbol = '';
+            try {
+                const symbol = localStorage.getItem("symbol-original");
+                if (!symbol) {
+                    throw new Error('No symbol found in localStorage');
+                }
 
-    async function fetchAndDisplaySymbolPrice() {
-        priceLoadingSpinner.classList.remove('d-none');
-        try {
-            const res = await getSymbolPrice(localStorage.getItem("symbol-original"), '{{ exchange_name }}');
-            currentPrice = res.price;
-            currentSymbol = res.symbol;
-            priceSymbolDisplay.innerHTML = `${currentPrice.toFixed(2)} ${currentSymbol}`;
-            symbolSpans.forEach(span => span.innerHTML = currentSymbol);
-        } catch (error) {
-            console.error('Error fetching and displaying symbol price:', error);
-            currentPrice = 0;
-            currentSymbol = localStorage.getItem("symbol-original") || 'UNKNOWN';
-            priceSymbolDisplay.innerHTML = `Error fetching price for ${currentSymbol}`;
-            symbolSpans.forEach(span => span.innerHTML = currentSymbol);
-        } finally {
-            priceLoadingSpinner.classList.add('d-none');
-            updateUSDCalculations(); // Recalculate USD after price is fetched
-        }
-    }
-
-    function calculateUSD(amount) {
-        return (amount * currentPrice).toFixed(2);
-    }
-
-    function updateUSDCalculations() {
-        const buyAmountInput = container.querySelector('.buy-amount');
-        const buyUsdInput = container.querySelector('.buy-usd');
-        if (buyAmountInput && buyUsdInput) {
-            const buyAmount = parseFloat(buyAmountInput.value) || 0;
-            buyUsdInput.value = calculateUSD(buyAmount);
+                const res = await getSymbolPriceLOCAL(symbol, CONFIG.exchangeName);
+                currentPrice = res.price;
+                currentSymbol = res.symbol;
+                
+                console.log(`Price update for ${CONFIG.exchangeName}:`, res);
+                
+                if (priceSymbolDisplay) {
+                    priceSymbolDisplay.innerHTML = `${currentPrice.toFixed(2)} ${currentSymbol}`;
+                }
+                
+                symbolSpans.forEach(span => span.innerHTML = currentSymbol);
+                
+                // Update USD calculations after price update
+                updateUSDCalculations();
+            } catch (error) {
+                // console.info(`Error fetching and displaying symbol price for ${CONFIG.exchangeName}:`, error);
+                currentPrice = 0;
+                currentSymbol = localStorage.getItem("symbol-original") || 'UNKNOWN';
+                
+                if (priceSymbolDisplay) {
+                    priceSymbolDisplay.innerHTML = `Error fetching price for ${currentSymbol}`;
+                }
+                
+                symbolSpans.forEach(span => span.innerHTML = currentSymbol);
+            } finally {
+                if (priceLoadingSpinner) {
+                    priceLoadingSpinner.classList.add('d-none');
+                }
+            }
         }
 
-        const sellAmountInput = container.querySelector('.sell-amount');
-        const sellUsdInput = container.querySelector('.sell-usd');
-        if (sellAmountInput && sellUsdInput) {
-            const sellAmount = parseFloat(sellAmountInput.value) || 0;
-            sellUsdInput.value = calculateUSD(sellAmount);
-        }
-    }
-
-    // Attach event listeners to amount inputs
-    const buyAmountInput = container.querySelector('.buy-amount');
-    if (buyAmountInput) {
-        buyAmountInput.addEventListener('input', updateUSDCalculations);
-    }
-
-    const sellAmountInput = container.querySelector('.sell-amount');
-    if (sellAmountInput) {
-        sellAmountInput.addEventListener('input', updateUSDCalculations);
-    }
-
-    // Initial fetch and calculation on load
-    setTimeout(fetchAndDisplaySymbolPrice, 10000);
-
-    const submitOrder = async function(direction) {
-        buyBtn.disabled = true;
-        sellBtn.disabled = true;
-        const symbol = currentSymbol || localStorage.getItem("symbol-original") || 'UNKNOWN'; // Use currentSymbol if available
-
-        const amountInput = container.querySelector(`.${direction}-amount`);
-        const amount = parseFloat(amountInput.value);
-        let stopLoss = 0;
-        let takeProfit = 0;
-
-        if (isNaN(amount) || amount <= 0) {
-            alert(`Please enter a valid amount for ${direction} order. Amount must be greater than ${amount}.`);
-            return;
+        // Calculate USD equivalent
+        function calculateUSD(amount) {
+            return (amount * currentPrice).toFixed(2);
         }
 
-        let details = `Submitting ${direction} order for ${amount} ${symbol}`;
-        
-        // Check if trading_mode is 'futures' using a data attribute or a global JS variable set by Jinja
-        // For now, we'll rely on the Jinja variable directly as per the plan.
-        const tradingMode = "{{ trading_mode }}"; 
-        const exchangeName = "{{ exchange_name }}";
+        // Update USD calculations for both buy and sell sections
+        function updateUSDCalculations() {
+            const buyAmountInput = container.querySelector('.buy-amount');
+            const buyUsdInput = container.querySelector('.buy-usd');
+            if (buyAmountInput && buyUsdInput) {
+                const buyAmount = parseFloat(buyAmountInput.value) || 0;
+                buyUsdInput.value = calculateUSD(buyAmount);
+            }
 
-        if (tradingMode === 'futures') {
-            const stopLossInput = container.querySelector(`.${direction}-stoploss`);
-            const takeProfitInput = container.querySelector(`.${direction}-takeprofit`);
+            const sellAmountInput = container.querySelector('.sell-amount');
+            const sellUsdInput = container.querySelector('.sell-usd');
+            if (sellAmountInput && sellUsdInput) {
+                const sellAmount = parseFloat(sellAmountInput.value) || 0;
+                sellUsdInput.value = calculateUSD(sellAmount);
+            }
+        }
+
+        // Submit order function
+        async function submitOrder(direction) {
+            if (!buyBtn || !sellBtn) return;
             
-            stopLoss = stopLossInput ? parseFloat(stopLossInput.value) : 0;
-            takeProfit = takeProfitInput ? parseFloat(takeProfitInput.value) : 0;
+            buyBtn.disabled = true;
+            sellBtn.disabled = true;
+            
+            const symbol = currentSymbol || localStorage.getItem("symbol-original") || 'UNKNOWN';
 
-            details += `\nStop Loss: ${stopLoss}`;
-            details += `\nTake Profit: ${takeProfit}`;
-        }
+            const amountInput = container.querySelector(`.${direction}-amount`);
+            const amount = parseFloat(amountInput?.value || 0);
 
-        try {
+            if (isNaN(amount) || amount <= 0) {
+                alert(`Please enter a valid amount for ${direction} order. Amount must be greater than 0.`);
+                return;
+            }
 
-            const res = await fetch('{{ url_for("routes.add_order") }}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    trading_mode: exchangeName,
+            let stopLoss = 0;
+            let takeProfit = 0;
+
+            if (CONFIG.tradingMode === 'futures') {
+                const stopLossInput = container.querySelector(`.${direction}-stoploss`);
+                const takeProfitInput = container.querySelector(`.${direction}-takeprofit`);
+                
+                stopLoss = stopLossInput ? parseFloat(stopLossInput.value) : 0;
+                takeProfit = takeProfitInput ? parseFloat(takeProfitInput.value) : 0;
+            }
+
+            try {
+                const leverageElement = container.querySelector(`.leverage-${CONFIG.exchangeName}`);
+                const leverage = leverageElement ? Number(leverageElement.value) : 1;
+
+                const orderData = {
+                    trading_mode: CONFIG.exchangeName,
                     orderType: "market",
-                    order_made_by:"user",
+                    order_made_by: "user",
                     orderDirection: direction,
                     symbol: symbol,
                     amount: amount,
                     stopLoss: stopLoss,
                     takeProfit: takeProfit,
-                    leverage: Number(container.querySelector(`.leverage-${exchangeName}`).value)
-                })
-            });
+                    leverage: leverage
+                };
 
-            const orderData = await res.json();
-            if (orderData.error) {
-                alert(`Error submitting order: ${orderData.error}`);
-                return;
+                console.log(`Submitting order for ${CONFIG.exchangeName}:`, JSON.stringify(orderData));
+
+                const res = await fetch(CONFIG.addOrderUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(orderData)
+                });
+
+                const responseData = await res.json();
+                if (responseData.error) {
+                    alert(`Error submitting order: ${responseData.error}`);
+                    return;
+                }
+                
+                alert("Order submitted successfully!");
+                console.log({ newOrder: responseData });
+
+                // Clear form after successful order
+                if (amountInput) amountInput.value = '';
+                updateUSDCalculations();
+
+                // Call external functions if they exist
+                if (typeof fetchUserTrades === 'function') {
+                    fetchUserTrades().then((trades) => {
+                        if (typeof renderUserTrades === 'function') {
+                            renderUserTrades(trades);
+                        }
+                    });
+                }
+                
+            } catch (error) {
+                console.error('Error submitting order:', error);
+                alert('Error submitting order. Please try again.');
+            } finally {
+                if (buyBtn) buyBtn.disabled = false;
+                if (sellBtn) sellBtn.disabled = false;
             }
-            alert("Order submitted successfully!");
-            console.log({newOrder: orderData});
-
-            // external functions
-            fetchUserTrades().then(renderUserTrades)
-            // todo: update balance
-        } catch (error) {
-            console.error('Error submitting order:', error);
-            return;
-        } finally
-        {
-            buyBtn.disabled = false;
-            sellBtn.disabled = false;
         }
-        //alert(details);
-    };
 
-    // add listeners
-    buyBtn.addEventListener('click', () => submitOrder('buy'));
-    sellBtn.addEventListener('click', () => submitOrder('sell'));
-});
+        // Setup event listeners
+        function setupEventListeners() {
+            const buyAmountInput = container.querySelector('.buy-amount');
+            if (buyAmountInput) {
+                buyAmountInput.addEventListener('input', updateUSDCalculations);
+            }
+
+            const sellAmountInput = container.querySelector('.sell-amount');
+            if (sellAmountInput) {
+                sellAmountInput.addEventListener('input', updateUSDCalculations);
+            }
+
+            if (buyBtn) {
+                buyBtn.addEventListener('click', () => submitOrder('buy'));
+            }
+            
+            if (sellBtn) {
+                sellBtn.addEventListener('click', () => submitOrder('sell'));
+            }
+        }
+
+        // Initialize the component
+        function initialize() {
+            if (isInitialized) return;
+            
+            setupEventListeners();
+            setTimeout(fetchAndDisplaySymbolPrice, 5000);
+            isInitialized = true;
+        }
+
+        // Return the public interface
+        return {
+            refresh: fetchAndDisplaySymbolPrice,
+            updateCalculations: updateUSDCalculations,
+            getCurrentPrice: () => currentPrice,
+            getCurrentSymbol: () => currentSymbol,
+            initialize: initialize
+        };
+    }
+
+    // Initialize this instance when DOM is loaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            const instance = initializeTradingOrderMaker();
+            if (instance) {
+                window.TradingOrderMakerManager[CONFIG.exchangeName] = instance;
+                instance.initialize();
+            }
+        });
+    } else {
+        // DOM is already loaded
+        const instance = initializeTradingOrderMaker();
+        if (instance) {
+            window.TradingOrderMakerManager[CONFIG.exchangeName] = instance;
+            instance.initialize();
+        }
+    }
+})();
+
+// Global refresh function that can be called from anywhere
+if (!window.refresh_symbols) {
+    window.refresh_symbols = function() {
+        console.log('Refreshing all trading symbols...');
+        
+        // Refresh all trading order maker instances
+        Object.values(window.TradingOrderMakerManager).forEach(instance => {
+            if (instance && typeof instance.refresh === 'function') {
+                instance.refresh();
+            }
+        });
+        
+        // You can add other symbol refresh logic here
+        // For example, if you have other components that need refreshing
+        if (typeof window.refreshTradingViewWidget === 'function') {
+            window.refreshTradingViewWidget();
+        }
+        
+        if (typeof window.refreshAccountBalance === 'function') {
+            window.refreshAccountBalance();
+        }
+        
+        console.log('Symbol refresh completed');
+    };
+}
 </script>
 {% endmacro %}

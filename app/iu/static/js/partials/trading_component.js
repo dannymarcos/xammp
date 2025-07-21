@@ -20,6 +20,11 @@ function showAlert(message, type = 'info') {
 function renderUserTrades(trades) {
     const tbody = document.getElementById('user-trade-history-body');
     
+    if (!tbody) {
+        console.error('Trade history table body not found');
+        return;
+    }
+    
     if (!trades || trades.length === 0) {
         tbody.innerHTML = `
             <tr>
@@ -40,7 +45,7 @@ function renderUserTrades(trades) {
             <td class="${directionClass}">${trade.order_direction?.toUpperCase() || ''}</td>
             <td>${trade.symbol || ''}</td>
             <td class="text-end">${trade.price ? parseFloat(trade.price).toFixed(2) : '0.00'}</td>
-            <td class="text-end">${trade.volume ? parseFloat(trade.volume).toFixed(4) : '0.0000'}</td>
+            <td class="text-end">${trade.volume ? parseFloat(trade.volume).toFixed(8) : '0.00000000'}</td>
             <td>${trade.status || ''}</td>
             <td>${trade.exchange || ''}</td>
             <td>${trade.stop_loss || ''}</td>
@@ -173,60 +178,35 @@ function updateSellAvailableBalance(availableBalance, currencySymbol) {
 async function fetchUserTrades() {
     try {
         const res = await fetch(API_ENDPOINTS.getUserTrades);
+        if (!res.ok) {
+            throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const data = await res.json();
-        return data.trades
+        console.log('Fetched trades:', data);
+        return data.trades || [];
     } catch (error) {
         showAlert('Error fetching trades', 'error');
         console.error('Error fetching trades:', error);
+        return [];
     }
 }
 
-async function fetchAccountBalance() {
-    setTimeout(() => {
-        console.log('Fetching account balance...');
-    }, 800);
+async function getSymbolPrice(symbol, exchange="futures") {
     try {
-        const response = await fetch(API_ENDPOINTS.getBalance, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({ trading_mode: getTradingMode(), exchange_name: getTradingMode() }) // Use dynamic mode
-            });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log({data});
-        if (!data.result) {
-            throw new Error(data.error);
-        }
-
-        console.log('Balance data received:', data);
-        return data.result;
-            
-    } catch (error) {
-        console.error('Error fetching account balance:', error);
-        return error;
-    }
-}
-
-async function getSymbolPrice(symbol) {
-    try {
+        console.log("#".repeat(50));
+        console.log({symbol, exchange});
         if (!symbol) {
             console.warn("Symbol not provided");
             return;
         }
-        const res = await fetch(`${API_ENDPOINTS.getSymbolPrice}?symbol=${symbol}`);
-        
+        const res = await fetch(`${API_ENDPOINTS.getSymbolPrice}?symbol=${symbol}&exchange=${exchange}`);
+        console.log(res);
         if (!res.ok) {
             throw new Error(`HTTP error! status: ${res.status}`);
         }
         
         const json = await res.json();
+        console.log(json);
         // console.log("Symbol price response:", json);
         
         // Check if the response has the expected structure
@@ -384,7 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Clear input and refresh balance
             volumeInput.value = '';
-            renderAccountBalance(); // Refresh balance after successful order
+            // renderAccountBalance(); // Refresh balance after successful order
             renderUserTrades(result.all_trades);
 
         } catch (error) {
@@ -413,7 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
     buyTotalInput.addEventListener('input', calculateAmountToBuy);
 
     // --- Initial Load ---
-    renderAccountBalance();
+    // renderAccountBalance();
     fetchUserTrades().then(renderUserTrades);
     
     // Update market price with the current trading symbol
@@ -482,7 +462,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert("Error: " + result.error, "error");
         } else {
             showAlert("Order placed successfully", "info");
-            fetchUserTrades().then(renderUserTrades);
+            // Update trade history with the returned trades
+            if (result.all_trades) {
+                renderUserTrades(result.all_trades);
+            } else {
+                // Fallback to fetching trades if all_trades is not provided
+                fetchUserTrades().then(renderUserTrades);
+            }
         }
     }
 
@@ -511,7 +497,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert("Error: " + result.error, "error");
         } else {
             showAlert("Order placed successfully", "info");
-            fetchUserTrades().then(renderUserTrades);
+            // Update trade history with the returned trades
+            if (result.all_trades) {
+                renderUserTrades(result.all_trades);
+            } else {
+                // Fallback to fetching trades if all_trades is not provided
+                fetchUserTrades().then(renderUserTrades);
+            }
         }
     }
 
@@ -542,7 +534,13 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert("Error: " + result.error, "error");
         } else {
             showAlert("Order placed successfully", "info");
-            fetchUserTrades().then(renderUserTrades);
+            // Update trade history with the returned trades
+            if (result.all_trades) {
+                renderUserTrades(result.all_trades);
+            } else {
+                // Fallback to fetching trades if all_trades is not provided
+                fetchUserTrades().then(renderUserTrades);
+            }
         }
     }
 

@@ -35,3 +35,15 @@
 .navbar-dark .navbar-nav .nav-link {
 	color: rgba(255, 255, 255, 0.85);
 }
+
+.tx {
+	color: #0d6efd;
+}
+  
+.tx:hover {
+	cursor: pointer;
+}
+
+.ml-bep-20 {
+	margin-left: 1rem;
+}

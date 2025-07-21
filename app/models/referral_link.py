@@ -18,5 +18,10 @@ class ReferralLink(db.Model):
   user = db.relationship('User', backref=db.backref('referral_links', lazy=True), foreign_keys=[user_id])
   referrer = db.relationship('User', backref=db.backref('referred_links', lazy=True), foreign_keys=[referred_by])
 
+  def __init__(self, user_id, code, active=True):
+      self.user_id = user_id
+      self.code = code
+      self.active = active
+
   def __repr__(self):
       return f"<ReferralLink(id={self.id}, user_id={self.user_id}, code={self.code})>"

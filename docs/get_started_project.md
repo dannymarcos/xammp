@@ -112,15 +112,17 @@ Crea un archivo `.env` en la raíz del proyecto con estos valores mínimos:
 
 ```env
 # .env
-# Flask Configuration
-SECRET_KEY= # Important for session security
+
+# Flask Configuratin
+ENVIRONMENT="local"
+
+SECRET_KEY='generate_a_strong_random_secret_key_here' # Important for session security
 
 # Database Configuration
 # Example for MySQL (adjust user, password, host, dbname as needed)
-SQLALCHEMY_DATABASE_URI='mysql+pymysql://rootfff:fff@localhost/xampp22'
-
+# SQLALCHEMY_DATABASE_URI='mysql+pymysql://root:root@localhost/xampp22'
 # Example for SQLite (relative path)
-# SQLALCHEMY_DATABASE_URI='sqlite:///instance/your_database.db'
+SQLALCHEMY_DATABASE_URI=
 
 # Optional Trading Parameters (can override defaults in config.py if the code is modified to read them)
 # TRADING_MODE='spot'
@@ -128,8 +130,20 @@ SQLALCHEMY_DATABASE_URI='mysql+pymysql://rootfff:fff@localhost/xampp22'
 
 TELEGRAM_BOT_TOKEN=""
 TELEGRAM_BOT_USERNAME="" 
+
 KRAKEN_API_KEY=
 KRAKEN_API_SECRET=
+KRAKEN_FUTURE_API_KEY=
+KRAKEN_FUTURE_API_SECRET=
+
+KRAKEN_SPOT_API_KEY=
+KRAKEN_SPOT_API_SECRET=
+
+BINGX_API_KEY=
+BINGX_API_SECRET=
+BINGX_API_KEY_FUTURES=
+BINGX_API_SECRET_FUTURES=
+
 ```
 
 Si no configuras `SQLALCHEMY_DATABASE_URI`:
