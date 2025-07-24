@@ -204,9 +204,6 @@ def get_symbol_price():
         if exchange == "futures":
             kraken = ExchangeFactory().create_exchange(name="kraken_future", user_id=current_user.id)
             data = kraken.get_symbol_price(symbol)
-            print("#"*80)
-            print(data)
-            print("#"*80)
             
             return {"price": data[0], "status": data[1]}
         
