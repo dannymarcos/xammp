@@ -10,6 +10,7 @@
 				width="30"
 			/>
 		</a>
+		{% if not disableNav %}
 		<button
 			class="navbar-toggler"
 			type="button"
@@ -45,6 +46,8 @@
 					</a>
 				</li>
 				{% endif %}
+		{% endif %}
+			
 				<li class="nav-item">
 					<a class="btn btn-danger" href="{{ url_for('auth.logout')}}"
 						>Log out</a

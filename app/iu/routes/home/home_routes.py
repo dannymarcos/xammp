@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, session
+from flask import Blueprint, render_template, session, redirect, url_for
 from flask_login import login_required, current_user
 import logging
 
@@ -13,6 +13,9 @@ def home():
     """Home page route"""
     try:
         current_language = session.get('language', 'en')
+
+        if current_user.role == "admin":
+            return redirect(url_for('admin.admin_route'))
 
         return render_template("home.html", current_language=current_language, is_admin=(current_user.role == "admin"))
     except Exception as e:

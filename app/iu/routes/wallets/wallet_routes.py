@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, redirect, render_template, request, jsonify, url_for
 from flask_login import login_required, current_user
 from app.iu.routes.utils.utils import get_translated_text
 from app.models.users import get_referred_by_user
@@ -55,6 +55,9 @@ def withdrawal_period_active(last_verified):
 @wallet_bp.route("/wallet", methods=['GET', 'POST'])
 @login_required
 def home_wallet():
+    if current_user.role == "admin":
+        return redirect(url_for('admin.admin_route'))
+
     name = current_user.full_name
     id = current_user.id
 

@@ -9,6 +9,25 @@ from app.viewmodels.wallet.found import Wallet
 bot_bp = Blueprint('bot', __name__)
 logger = logging.getLogger(__name__)
 
+def get_current_price(exchange, symbol):
+    asset_price = None
+
+    try:
+        current_price = exchange.get_symbol_price(symbol)
+
+        if isinstance(current_price, tuple):
+            asset_price = current_price[0]
+            if isinstance(asset_price, dict) and "price" in asset_price:
+                asset_price = asset_price["price"]
+        elif isinstance(current_price, dict) and "price" in current_price:
+            asset_price = current_price["price"]
+        else:
+            asset_price = current_price            
+    except Exception as price_error:
+        logger.error(f"Error getting current price for {symbol}: {price_error}")
+
+    return asset_price
+
 @bot_bp.route("/bot/start_bot_trading", methods=['POST'])
 def start_bot_trading():
     """
@@ -61,10 +80,6 @@ def start_bot_trading():
         type_exchange_trading_mode: str = type_exchange+"_"+trading_mode
         type_exchange_trading_mode = type_exchange_trading_mode.lower()
 
-        if not wallet.has_balance_in_currency(trade_amount, base_currency, base_currency, type_exchange_trading_mode):
-            formatted_amount = f"{trade_amount:.10f}".rstrip('0').rstrip('.') if '.' in f"{trade_amount:.10f}" else f"{trade_amount:.10f}"
-            return jsonify({"error": f"Insufficient {base_currency} balance in your wallet. Required: {formatted_amount}"}), 400
-
         # Create configuration for the bot
         config = {
             'trading_pair': trading_pair,
@@ -81,6 +96,13 @@ def start_bot_trading():
         name = "bingx" if type_exchange == "bingx" else ("kraken_spot" if trading_mode == "spot" else "kraken_future")
         exchange = ExchangeFactory().create_exchange(name=name, user_id=user_id)
         
+        price = get_current_price(exchange, trading_pair)
+        amount_in_usdt = trade_amount * price
+
+        if not wallet.has_balance_in_currency(amount_in_usdt, quote_currency, "USDT", "general"):
+            formatted_amount = f"{amount_in_usdt:.10f}".rstrip('0').rstrip('.') if '.' in f"{trade_amount:.10f}" else f"{trade_amount:.10f}"
+            return jsonify({"error": f"Insufficient {base_currency} balance in your general wallet. Required: {formatted_amount}"}), 400
+
         # Start the bot
         if TradingBotManager.start_bot(user_id, exchange, config, bot_id=bot_id, type_wallet=type_exchange_trading_mode):
             # Update bot_status in the database

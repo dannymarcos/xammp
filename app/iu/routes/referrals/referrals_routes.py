@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, jsonify, request
+from flask import Blueprint, redirect, render_template, jsonify, request, url_for
 from flask_login import login_required, current_user
 from app.models.referral_link import ReferralLink
 from app.models.users import User, get_user_referrals
@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 @referrals_bp.route("/referrals", methods=['GET', 'POST'])
 @login_required
 def referrals():
+    if current_user.role == "admin":
+        return redirect(url_for('admin.admin_route'))
+
     if request.method == 'GET':
         user = User.query.filter_by(id=current_user.id).first()
         if not user:
