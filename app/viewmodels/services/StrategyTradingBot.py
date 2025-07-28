@@ -2,6 +2,7 @@ import random
 import threading
 import random
 import time
+from app.lib.utils.tx import emit
 from app.viewmodels.services.TradingBot import TradingConfig
 from app.models.strategies import get_strategy_by_id
 from app.viewmodels.services.llm import DeepSeekPPOAgent, QwenTradingAssistant, MODEL_PATHS
@@ -20,7 +21,7 @@ ppo_agent = DeepSeekPPOAgent(
 )
 
 class StrategyTradingBot:
-    def __init__(self, user_id, exchange: Exchange, config: dict, type_wallet: str):
+    def __init__(self, user_id, exchange: Exchange, config: dict, type_wallet: str, email: str):
         self.user_id = user_id
         self.exchange = exchange
         self.running = False
@@ -29,6 +30,7 @@ class StrategyTradingBot:
         self.wallet_admin = WalletAdmin()
         self.wallet = Wallet(self.user_id)
         self.type_wallet = type_wallet
+        self.email = email
 
     def start(self):
         self.running = True
@@ -46,7 +48,9 @@ class StrategyTradingBot:
         while self.running:
             time.sleep(5)
             strategy = self.get_strategy()
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Our AI assistant is analyzing the market and preparing your next trading move"})
             decision = self.interact_with_llm(strategy)
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Our AI assistant suggests to '{decision.upper()}'"})
             self.execute_action(decision)
 
     def get_strategy(self):
@@ -69,12 +73,14 @@ class StrategyTradingBot:
         else:
             strategy_prompt = strategy.text
 
+        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "AI is checking your strategy. Please wait a moment."})
         qwen_strategy = qwen_assistant.generate_strategy(
             current_market=market_data,
             strategy_prompt=strategy_prompt,
             orders_made=self.trades
         )
 
+        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "AI is checking the market for you..."})
         qwen_output = qwen_assistant.parse_strategy(qwen_strategy)
 
         if qwen_output == None:
@@ -133,6 +139,8 @@ class StrategyTradingBot:
         # Verificar si tiene suficiente USDT en la wallet general
         if not self.wallet.has_balance_in_currency(total_cost_usdt, "USDT", "USDT", "general"):
             print(f"ERROR: Insufficient USDT balance in your wallet. Required: {total_cost_usdt} USDT")
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Not enough USDT to buy. You need {total_cost_usdt:.2f} USDT."})
+
             return
 
         # Call add_order with correct parameters based on exchange type
@@ -172,6 +180,7 @@ class StrategyTradingBot:
 
         if 'error' in order:
             print(f"Error executing buy order: {order['error']}")
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Not enough funds (main exchange) to place your buy order"})
             return
         
         # Obtener el precio actual del exchange para las transacciones
@@ -189,6 +198,7 @@ class StrategyTradingBot:
         # Ensure price is a number
         if not isinstance(price, (int, float)) or price <= 0:
             print(f"ERROR: Could not get valid price from exchange: {price}")
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Sorry, we couldn't get the latest price"})
             return
             
         print(f"Using current market price for transactions: {price}")
@@ -202,6 +212,8 @@ class StrategyTradingBot:
         self.wallet_admin.add_found(self.user_id, amount, base_currency, self.type_wallet)
 
         self.trades.append({"action": "buy", "price": price})
+        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Buy order placed at {price}. You're all set!"})
+
         print(f"📈 BUY order executed at {price}")
 
     def execute_sell_order(self):
@@ -210,6 +222,8 @@ class StrategyTradingBot:
         # Verificar si tiene suficiente BTC en la wallet específica
         if not self.wallet.has_balance_in_currency(self.config.trade_amount, base_currency, base_currency, self.type_wallet):
             print(f"ERROR: Insufficient {base_currency} balance in your {self.type_wallet} wallet. Required: {self.config.trade_amount}")
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Not enough {base_currency} in your {self.type_wallet} wallet to sell"})
+
             return
 
         # Call add_order with correct parameters based on exchange type
@@ -249,6 +263,8 @@ class StrategyTradingBot:
 
         if 'error' in order:
             print(f"Error executing sell order: {order['error']}")
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Oops! We couldn't place your sell order"})
+
             return
         
         # Obtener el precio actual del exchange para las transacciones
@@ -266,6 +282,8 @@ class StrategyTradingBot:
         # Ensure price is a number
         if not isinstance(price, (int, float)) or price <= 0:
             print(f"ERROR: Could not get valid price from exchange: {price}")
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Sorry, couldn't get the price"})
+
             return
             
         print(f"Using current market price for transactions: {price}")
@@ -279,6 +297,7 @@ class StrategyTradingBot:
         self.wallet_admin.add_found(self.user_id, price * amount, "USDT" if quote_currency == "USD" else quote_currency, "general")
 
         self.trades.append({"action": "sell", "price": price})
+        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Sold at {price} 📉"})
         print(f"📉 SELL order executed at {price}")
 
     def wait(self):

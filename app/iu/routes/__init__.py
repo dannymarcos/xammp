@@ -13,6 +13,7 @@ from .tradings.trading_routes import trading_bp
 from .home.home_routes import home_bp
 from .admin.admin_routes import admin_bp
 from .utils.utils import load_translations, get_translated_text
+from .see.see import see_bp
 
 # Lista de todos los blueprints para registro masivo
 all_blueprints = [
@@ -28,7 +29,8 @@ all_blueprints = [
     support_bp,
     trading_bp,
     home_bp,
-    admin_bp
+    admin_bp,
+    see_bp
 ]
 
 def register_blueprints(app):
@@ -54,5 +56,6 @@ __all__ = [
     'get_translated_text',
     'translations',
     'home_bp',
-    'admin_bp'
+    'admin_bp',
+    'see_bp'
 ]

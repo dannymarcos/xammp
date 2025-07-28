@@ -25,7 +25,8 @@ class TradingBotManager:
         exchange: ExchangeFactory,
         config,
         bot_id="basic-bot",
-        type_wallet: str = ""
+        type_wallet: str = "",
+        email: str = "",
     ):
         """
         Start a trading bot for the specified user using the TradingBot implementation
@@ -43,8 +44,9 @@ class TradingBotManager:
 
             # Check if bot is already running
             if user_id in cls._bots:
-                logger.warning("Bot for user %s is already running", user_id)
-                return False
+                if bot_id in cls._bots[user_id]:
+                    logger.warning("Bot for user %s is already running", user_id)
+                    return False
 
             # Get API credentials from user
             user = User.query.filter_by(id=user_id).first()
@@ -64,7 +66,8 @@ class TradingBotManager:
                         user_id,
                         cls.exchange,
                         config,
-                        cls.type_wallet
+                        cls.type_wallet,
+                        email
                     )
                 else:
                     # "basic-bot" or others
@@ -72,7 +75,8 @@ class TradingBotManager:
                         user_id,
                         cls.exchange,
                         config,
-                        cls.type_wallet
+                        cls.type_wallet,
+                        email
                     )
 
                 logger.debug("Starting TradingBot for user %s", user_id)
@@ -81,7 +85,10 @@ class TradingBotManager:
                     return False
 
                 # Store the bot instance
-                cls._bots[user_id] = bot
+                if user_id not in cls._bots:
+                    cls._bots[user_id] = {}
+
+                cls._bots[user_id][bot_id] = bot
                 logger.info("Successfully started bot for user %s", user_id)
                 return True
 
@@ -96,7 +103,7 @@ class TradingBotManager:
             return False
 
     @classmethod
-    def stop_bot(cls, user_id):
+    def stop_bot(cls, user_id, bot_id):
         """
         Stop the trading bot for the specified user
 
@@ -111,11 +118,13 @@ class TradingBotManager:
 
             # Check if bot exists
             if user_id not in cls._bots:
-                logger.warning(f"No active bot found for user {user_id}")
-                return False
+                cls._bots[user_id] = {}
+                if bot_id not in cls._bots[user_id]:
+                    logger.warning(f"No active bot {bot_id} found for user {user_id}")
+                    return False
 
             # Get the bot instance
-            bot = cls._bots[user_id]
+            bot = cls._bots[user_id][bot_id]
 
             # Stop the bot
             try:
@@ -124,7 +133,7 @@ class TradingBotManager:
                 logger.info(f"Successfully stopped bot for user {user_id}")
 
                 # Remove the bot from the active bots
-                del cls._bots[user_id]
+                del cls._bots[user_id][bot_id]
                 return True
 
             except Exception as e:
@@ -138,7 +147,7 @@ class TradingBotManager:
             return False
 
     @classmethod
-    def is_bot_running(cls, user_id):
+    def is_bot_running(cls, user_id, bot_id):
         """
         Check if a bot is running for the specified user
 
@@ -150,19 +159,21 @@ class TradingBotManager:
         """
         # Check if bot exists in the new implementation
         if user_id in cls._bots:
-            bot = cls._bots[user_id]
-            return hasattr(bot, "running") and bot.running
+            if bot_id in cls._bots[user_id]:
+                bot = cls._bots[user_id][bot_id]
+                return hasattr(bot, "running") and bot.running
 
         # Check if bot exists in the legacy implementation
         if user_id in cls._legacy_bots:
-            bot_data = cls._legacy_bots[user_id]
-            return bot_data["thread"].is_alive()
+            if bot_id in cls._legacy_bots[user_id]:
+                bot_data = cls._legacy_bots[user_id][bot_id]
+                return bot_data["thread"].is_alive()
 
         return False
 
     # Legacy methods for testing purposes
     @classmethod
-    def start_legacy_bot(cls, user_id, config):
+    def start_legacy_bot(cls, user_id, config, bot_id):
         """
         Start a legacy trading bot for testing purposes
 
@@ -179,8 +190,9 @@ class TradingBotManager:
 
             # Check if bot is already running
             if user_id in cls._legacy_bots:
-                logger.warning("Legacy bot for user %s is already running", user_id)
-                return False
+                if bot_id in cls._legacy_bots[user_id]:
+                    logger.warning("Legacy bot for user %s is already running %s", user_id, bot_id)
+                    return False
 
             # Get API credentials from user
             user = User.query.filter_by(id=user_id).first()
@@ -201,7 +213,7 @@ class TradingBotManager:
                 daemon=True,
             )
 
-            cls._legacy_bots[user_id] = {"thread": bot_thread, "stop_event": stop_event}
+            cls._legacy_bots[user_id][bot_id] = {"thread": bot_thread, "stop_event": stop_event}
             bot_thread.start()
             logger.info("Successfully started legacy bot for user %s", user_id)
             return True
@@ -212,7 +224,7 @@ class TradingBotManager:
             return False
 
     @classmethod
-    def stop_legacy_bot(cls, user_id):
+    def stop_legacy_bot(cls, user_id, bot_id):
         """
         Stop a legacy trading bot
 
@@ -227,11 +239,13 @@ class TradingBotManager:
 
             # Check if bot exists
             if user_id not in cls._legacy_bots:
-                logger.warning(f"No active legacy bot found for user {user_id}")
-                return False
+                cls._legacy_bots[user_id] = {}
+                if bot_id not in cls._legacy_bots[user_id]:
+                    logger.warning(f"No active legacy bot found for user {user_id} - {bot_id}")
+                    return False
 
             # Get the bot data
-            bot_data = cls._legacy_bots[user_id]
+            bot_data = cls._legacy_bots[user_id][bot_id]
 
             # Stop the bot
             bot_data["stop_event"].set()  # Signal to stop
@@ -245,7 +259,7 @@ class TradingBotManager:
                 )
 
             # Remove the bot from the active bots
-            del cls._legacy_bots[user_id]
+            del cls._legacy_bots[user_id][bot_id]
             logger.info(f"Successfully stopped legacy bot for user {user_id}")
             return True
 

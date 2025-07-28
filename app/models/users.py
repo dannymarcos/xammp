@@ -20,7 +20,8 @@ class User(db.Model, UserMixin):  # Inherit from UserMixin
     full_name = db.Column(db.String(255))
     nationality = db.Column(db.String(100))
     password_hash = db.Column(db.String(255), nullable=False)
-    bot_status = db.Column(db.String(16), nullable=False, default="stopped")
+    strategy_bot_status = db.Column(db.String(16), nullable=False, default="stopped")
+    basic_bot_status = db.Column(db.String(16), nullable=False, default="stopped")
     kraken_api_key = db.Column(db.String(255), default=KRAKEN_API_KEY) # TODOL REMOVE
     kraken_api_secret = db.Column(db.String(255), default=KRAKEN_API_SECRET) # TODOL REMOVE
     last_error_message = db.Column(db.String(255), default="")
@@ -39,10 +40,13 @@ class User(db.Model, UserMixin):  # Inherit from UserMixin
         return str(self.id)
 
 
-def update_user_bot_status(user_id, bot_status):
+def update_user_bot_status(user_id, bot_status, bot_id):
     user = User.query.filter_by(id=user_id).first()
     if user:
-        user.bot_status = bot_status
+        if bot_id == "strategy-bot":
+            user.strategy_bot_status = bot_status
+        else:
+            user.basic_bot_status = bot_status
         db.session.commit()
 
 def add_last_error_message(user_id, message):

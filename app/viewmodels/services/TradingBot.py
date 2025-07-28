@@ -16,6 +16,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 
+from app.lib.utils.tx import emit
 from app.models.trades import (
     get_open_trades_from_user,
     set_trade_actual_profit,
@@ -106,17 +107,22 @@ class TradingBot:
         user_id,
         exchange: Exchange,
         config: Dict,
-        type_wallet: str
+        type_wallet: str,
+        email: str
     ):
         if hasattr(self, "_initialized"):
             # logger.debug(f"Bot instance for user {user_id} already initialized, skipping initialization") # Can be noisy
             return
+        
+        self.email = email
 
         logger.info("Initializing trading bot for user %s", user_id)
 
         try:
             # Validate configuration
             logger.debug("Validating configuration for user %s", user_id)
+            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Checking your bot settings. Please wait while we validate your configuration..."})
+
             self.config = TradingConfig(**config)
             self.user_id = user_id
             # Use the exchange factory to create an actual exchange instance
@@ -273,6 +279,7 @@ class TradingBot:
 
         while self.running:
             loop_count += 1
+            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"We're working on your trading bot, and this is round #{loop_count}"})
             # logger.debug(f"--- Trading loop iteration {loop_count} for user {self.user_id} ---") # Can be noisy
 
             if self._should_stop():
@@ -300,6 +307,7 @@ class TradingBot:
                     logger.warning(
                         "DataFrame empty or too short after indicator calculation, skipping iteration."
                     )
+                    emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Not enough market data to analyze right now. Waiting for more data before making trading decisions."})
                     time.sleep(5)
                     continue
 
@@ -666,6 +674,8 @@ class TradingBot:
                     print(
                         f"🎉 TRADE OPENED: BUY {trade_amount:.6f} {self.config.trading_pair} at {actual_fill_price:.6f} (Exchange ID: {exchange_order_id}, DB ID: {db_trade_id})"
                     )
+                    emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"🚀 A new trade has been opened! You bought {trade_amount:.6f} {self.config.trading_pair} at a price of {actual_fill_price:.6f} 🎉"})
+
                     logger.info(
                         f"✅ BUY order placed and tracked: Exchange ID {exchange_order_id}, DB ID {db_trade_id}. Entry Price: {actual_fill_price:.6f}, Amount: {trade_amount}"
                     )
@@ -727,6 +737,7 @@ class TradingBot:
                     logger.info(
                         f"✅ SELL order (DB ID: {sell_db_id}, Exch ID: {sell_exchange_id}) placed to close BUY trade (Exch ID: {trade_id})"
                     )
+                    emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"Great news! A SELL order was placed to close your BUY trade"})
 
                     # Record the trade result, passing the original BUY trade details and the DB ID of the new SELL trade
                     self._record_trade_result(
@@ -908,6 +919,7 @@ class TradingBot:
             ### CHANGE KRAKEN_API AND BINGXEXCHANGE
             volume = 0.0001 if self.config.trade_amount < 0.001 else self.config.trade_amount
             
+            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Placing a new order for you. Please wait while we process it!"})
             order_result = self.exchange.add_order(side,self.config.trading_pair,volume)
 
             # Handle tuple response (order_data, status_code)
@@ -929,6 +941,7 @@ class TradingBot:
                 error = order_data["error"]
                 # kraken_api is expected to return (None, error_string) or (error_dict, None)
                 # Handle different potential error formats from kraken_api
+                emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Oops! We couldn't place your order this time"})
                 error_message = (
                     str(error)
                     if isinstance(error, Exception)
@@ -944,6 +957,7 @@ class TradingBot:
                 logger.info(
                     f"✅ {side.upper()} order placed successfully: {order_data['id']}"
                 )
+                emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Your order has been placed successfully! 🎉"})
                 # Return the order_data received from the API, which should include the fill price for market orders
                 return order_data
             else:
@@ -957,6 +971,7 @@ class TradingBot:
 
         except Exception as e:
             logger.error(f"❌ Exception creating {side} order: {str(e)}")
+            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Sorry, something went wrong while placing your order"})
             traceback.print_exc()
             self._add_bot_error(f"Exception creating {side} order: {e}")
             return None

@@ -14,9 +14,6 @@ logger = logging.getLogger(__name__)
 @referrals_bp.route("/referrals", methods=['GET', 'POST'])
 @login_required
 def referrals():
-    if current_user.role == "admin":
-        return redirect(url_for('admin.admin_route'))
-
     if request.method == 'GET':
         user = User.query.filter_by(id=current_user.id).first()
         if not user:

@@ -91,16 +91,24 @@
     </div>
     <!-- Bot Controls -->
     <div class="d-flex align-items-center mb-4">
-      <button id="run-bot" class="btn btn-success me-3 toggle-bot">
+      <button id="run-bot" class="btn btn-success me-3 toggle-bot-strategy-bot">
         <i class="bi bi-play-fill"></i> Run Bot
       </button>
       <div class="d-flex align-items-center">
         <span class="me-2">Status:</span>
-        <span id="bot-status" class="badge bg-secondary bot-status">Stopped</span>
+        <span id="bot-status" class="badge bg-secondary bot-status-strategy-bot">Stopped</span>
         <span class="ms-3">Last Error:</span>
         <span id="last-error-message" class="badge bg-warning text-dark"></span>
       </div>
     </div>
+
+    <div class="card shadow-sm w-full bg-primary" style="visibility: hidden;" id="ContentForTradingCustomBot">
+      <center>
+        <h2 style="color: white;" id="MessageForTradingCustomBot"></h2>
+      </center>
+    </div>
+
+
     <!-- Trade History -->
     <div class="mt-4">
       <h4 class="h5 mb-3">Trade History</h4>
@@ -122,7 +130,7 @@
               <th>Comment</th>
             </tr>
           </thead>
-          <tbody id="strategy-trade-history-body" class="trade-history-body">
+          <tbody id="strategy-trade-history-body" class="trade-history-body-strategy-bot">
             <tr>
               <td colspan="12" class="text-center">No trades found</td>
             </tr>
@@ -141,3 +149,46 @@
     });
 </script>
 <script src="{{ url_for('static', filename='js/partials/trading_strategies.js') }}"></script>
+
+<script>
+  const setupSSEConnection = () => {
+    const userEmail = "{{ email }}";
+    const encodedEmail = encodeURIComponent(userEmail);
+    const sseUrl = `/sse/${encodedEmail}`;
+
+    const eventSource = new EventSource(sseUrl, {
+      withCredentials: true
+    });
+
+    eventSource.onmessage = (e) => {
+      const data = JSON.parse(e.data.replace("event: bot\n", ""))
+      if(data.id === "strategy-bot") {
+        document.getElementById("MessageForTradingCustomBot").innerText = data.msg;
+        document.getElementById("ContentForTradingCustomBot").style.visibility = "visible";
+      }else {
+        document.getElementById("MessageForTradingBasicBot").innerText = data.msg;
+        document.getElementById("ContentForTradingBasicBot").style.visibility = "visible";
+      }
+    };
+
+    eventSource.onopen = () => {
+      console.log("✅ Conexión SSE establecida para:", userEmail);
+    };
+
+    eventSource.onerror = (error) => {
+      console.error("❌ Error en conexión SSE:", error);
+      eventSource.close();
+
+      setTimeout(() => {
+        console.log("⏱ Intentando reconectar SSE...");
+        setupSSEConnection();
+      }, 5000);
+    };
+
+    return eventSource;
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setupSSEConnection();
+  });
+</script>

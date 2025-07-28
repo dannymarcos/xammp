@@ -26,15 +26,15 @@ export class TradingBot {
 
 		// Cache DOM elements
 		this.uiElements = {
-			toggleButton: this.container.querySelector(".toggle-bot"),
-			statusBadge: this.container.querySelector(".bot-status"),
-			tradeHistoryBody: this.container.querySelector(".trade-history-body"),
-			lastErrorMessage: this.container.querySelector(".last-error-message"),
-			selectedStrategy: this.container.querySelector(".strategy-list"),
+			toggleButton: this.container.querySelector(`.toggle-bot-${this.botId}`),
+			statusBadge: this.container.querySelector(`.bot-status-${this.botId}`),
+			tradeHistoryBody: this.container.querySelector(`.trade-history-body-${this.botId}`),
+			lastErrorMessage: this.container.querySelector(`.last-error-message-${this.botId}`),
+			selectedStrategy: this.container.querySelector(`.strategy-list`),
 		};
 
 		// Config inputs
-		this.configInputs = this.container.querySelectorAll(".bot-config-input");
+		this.configInputs = this.container.querySelectorAll(`.bot-config-input`);
 	}
 
 	/**

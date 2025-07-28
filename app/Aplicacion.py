@@ -1,11 +1,12 @@
 #app/Aplicacion.py
 
-from flask import Flask, render_template
+from flask import Flask, render_template, current_app
 from flask_cors import CORS
 from flask_login import LoginManager  # Import LoginManager
 from flask_babel import Babel, _
 import sqlalchemy  # Import Babel and _ function for translations
 
+from app.lib.utils.tx import subscribe
 from app.models.create_db import db
 from app.models.users import User  # Import the User model
 import os

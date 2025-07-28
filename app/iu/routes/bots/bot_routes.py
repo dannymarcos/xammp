@@ -1,3 +1,4 @@
+from app.lib.utils.tx import emit
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 import logging, traceback
@@ -56,6 +57,10 @@ def start_bot_trading():
 
         current_bot_status = None
         
+        if bot_id == "strategy-bot" and selected_strategy_id == "":
+            emit(email=current_user.email, event="bot", data={"id": bot_id, "msg": "Choose a strategy before starting the bot"})
+            raise Exception("Choose a strategy before starting the bot")
+
         # Validate required parameters
         if not data:
             current_bot_status = "error"
@@ -92,6 +97,11 @@ def start_bot_trading():
             'strategy_id': selected_strategy_id
         }
         # Initialize the appropriate Kraken API client
+
+        # Ejemplo de uso en cualquier archivo
+
+        # Enviar un evento a un usuario específico
+        emit(email=current_user.email, event="bot", data={"id": bot_id, "msg": "Start bot"})
         
         name = "bingx" if type_exchange == "bingx" else ("kraken_spot" if trading_mode == "spot" else "kraken_future")
         exchange = ExchangeFactory().create_exchange(name=name, user_id=user_id)
@@ -99,26 +109,32 @@ def start_bot_trading():
         price = get_current_price(exchange, trading_pair)
         amount_in_usdt = trade_amount * price
 
-        if not wallet.has_balance_in_currency(amount_in_usdt, quote_currency, "USDT", "general"):
+        quote_currency = "USDT" if quote_currency == "USD" else quote_currency
+
+        if not wallet.has_balance_in_currency(amount_in_usdt, quote_currency, "USDT", "general", name):
             formatted_amount = f"{amount_in_usdt:.10f}".rstrip('0').rstrip('.') if '.' in f"{trade_amount:.10f}" else f"{trade_amount:.10f}"
-            return jsonify({"error": f"Insufficient {base_currency} balance in your general wallet. Required: {formatted_amount}"}), 400
+
+            emit(email=current_user.email, event="bot", data={"id": bot_id, "msg": f"Insufficient {quote_currency} balance in your general wallet. Required: {formatted_amount}"})
+            return jsonify({"error": f"Insufficient {quote_currency} balance in your general wallet. Required: {formatted_amount}"}), 400
 
         # Start the bot
-        if TradingBotManager.start_bot(user_id, exchange, config, bot_id=bot_id, type_wallet=type_exchange_trading_mode):
+        if TradingBotManager.start_bot(user_id, exchange, config, bot_id=bot_id, type_wallet=type_exchange_trading_mode, email=current_user.email):
             # Update bot_status in the database
             current_bot_status = "running"
-            update_user_bot_status(user_id, current_bot_status)
+            update_user_bot_status(user_id, current_bot_status, bot_id)
             logger.info(f"Bot started successfully for user {user_id}")
             return jsonify({"status": "Bot started", "bot_status": current_bot_status}), 200
         else:
             current_bot_status = "error"
+            emit(email=current_user.email, event="bot", data={"id": bot_id, "msg": "Failed to start bot"})
+
             raise Exception("Failed to start bot")
     
     except Exception as e:
         logger.error(f"Error starting bot for user {current_user.id}: {str(e)}")
         logger.debug(f"Error details: {traceback.format_exc()}")
         current_bot_status = "error"
-        update_user_bot_status(current_user.id, current_bot_status)
+        update_user_bot_status(current_user.id, current_bot_status, bot_id)
         return jsonify({"error": str(e), "bot_status": current_bot_status}), 500
 
 @bot_bp.route("/bot/stop_bot_trading", methods=['POST'])
@@ -140,18 +156,22 @@ def stop_bot_trading():
         # TODO: Implement logic for bot_id
         
         # Get current bot status (this might need adjustment based on bot_id)
-        current_bot_status = User.query.filter_by(id=user_id).first().bot_status
+        if bot_id == "strategy_bot":
+            current_bot_status = User.query.filter_by(id=user_id).first().strategy_bot_status
+        else:
+            current_bot_status = User.query.filter_by(id=user_id).first().basic_bot_status
         
         # Stop the bot (this will need to be adapted for bot_id)
-        if TradingBotManager.stop_bot(user_id): # Assuming user_id is still primary key for now
+        if TradingBotManager.stop_bot(user_id, bot_id): # Assuming user_id is still primary key for now
             # Update bot_status in the database
             current_bot_status = "stopped"
-            update_user_bot_status(user_id, current_bot_status) # This might also need bot_id
+            update_user_bot_status(user_id, current_bot_status, bot_id) # This might also need bot_id
             logger.info(f"Bot {bot_id} stopped successfully for user {user_id}")
+            emit(email=current_user.email, event="bot", data={"id": bot_id, "msg": "The bot has been stopped"})
             return jsonify({"status": "Bot stopped", "bot_status": current_bot_status}), 200
         else:
             current_bot_status = "error"
-            update_user_bot_status(user_id, current_bot_status) # This might also need bot_id
+            update_user_bot_status(user_id, current_bot_status, bot_id) # This might also need bot_id
             logger.warning(f"No active bot {bot_id} found for user {user_id}")
             return jsonify({"error": f"No active bot {bot_id} found", "bot_status": current_bot_status}), 404
     
@@ -159,7 +179,7 @@ def stop_bot_trading():
         logger.error(f"Error stopping bot for user {current_user.id}: {str(e)}")
         logger.debug(f"Error details: {traceback.format_exc()}")
         current_bot_status = "error"
-        update_user_bot_status(current_user.id, current_bot_status)
+        update_user_bot_status(current_user.id, current_bot_status, bot_id)
         return jsonify({"error": str(e), "bot_status": current_bot_status}), 500
 
 @bot_bp.route("/bot/status")
@@ -187,17 +207,20 @@ def get_bot_status():
             return jsonify({"bot_status": "error"}), 404
         
         # Get the bot status
-        bot_status = user.bot_status
+        strategy_bot_status = user.strategy_bot_status
+        basic_bot_status = user.basic_bot_status
         
         # Check if the bot is actually running
-        is_running = TradingBotManager.is_bot_running(user_id)
+        is_running = TradingBotManager.is_bot_running(user_id, bot_id)
         
         # If the database says the bot is running but it's not actually running,
         # update the database to reflect the correct status
+        bot_status = strategy_bot_status if bot_id == "strategy-bot" else basic_bot_status
+
         if bot_status == "running" and not is_running:
             logger.warning(f"Bot status mismatch for user {user_id}: database says 'running' but bot is not running")
             bot_status = "stopped"
-            update_user_bot_status(user_id, bot_status)
+            update_user_bot_status(user_id, bot_status, bot_id)
         
         logger.debug(f"Bot status for user {user_id}: {bot_status}")
         return jsonify({"bot_status": bot_status, "last_error_message": user.last_error_message or ""}), 200

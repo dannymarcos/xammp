@@ -55,9 +55,6 @@ def withdrawal_period_active(last_verified):
 @wallet_bp.route("/wallet", methods=['GET', 'POST'])
 @login_required
 def home_wallet():
-    if current_user.role == "admin":
-        return redirect(url_for('admin.admin_route'))
-
     name = current_user.full_name
     id = current_user.id
 

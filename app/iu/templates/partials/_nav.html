@@ -10,25 +10,26 @@
 				width="30"
 			/>
 		</a>
-		{% if not disableNav %}
 		<button
-			class="navbar-toggler"
-			type="button"
+		class="navbar-toggler"
+		type="button"
 			data-bs-toggle="collapse"
 			data-bs-target="#navbarNav"
 			aria-controls="navbarNav"
 			aria-expanded="false"
 			aria-label="Toggle navigation"
-		>
+			>
 			<span class="navbar-toggler-icon"></span>
 		</button>
 		<div class="collapse navbar-collapse" id="navbarNav">
 			<ul class="navbar-nav ms-auto">
+				{% if not disableNav %}
 				<li class="nav-item">
 					<a class="nav-link active" aria-current="page" href="/"
-						><i class="fas fa-home"></i> Inicio</a
+					><i class="fas fa-home"></i> Inicio</a
 					>
 				</li>
+				{% endif %}
 				<li class="nav-item">
 					<a class="nav-link" href="/wallet">
 						<i class="fas fa-wallet"></i> Wallet</a
@@ -46,7 +47,6 @@
 					</a>
 				</li>
 				{% endif %}
-		{% endif %}
 			
 				<li class="nav-item">
 					<a class="btn btn-danger" href="{{ url_for('auth.logout')}}"

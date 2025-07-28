@@ -17,7 +17,7 @@ def home():
         if current_user.role == "admin":
             return redirect(url_for('admin.admin_route'))
 
-        return render_template("home.html", current_language=current_language, is_admin=(current_user.role == "admin"))
+        return render_template("home.html", current_language=current_language, is_admin=(current_user.role == "admin"), email=current_user.email)
     except Exception as e:
         logger.error(f"Error in home route: {e}")
-        return render_template("home.html", error=str(e), get_translated_text=get_translated_text, is_admin=(current_user.role == "admin"))
+        return render_template("home.html", error=str(e), get_translated_text=get_translated_text, is_admin=(current_user.role == "admin"), email=current_user.email)

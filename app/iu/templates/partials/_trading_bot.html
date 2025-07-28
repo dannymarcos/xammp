@@ -5,14 +5,14 @@
         
         <!-- Bot Controls -->
         <div class="d-flex align-items-center mb-4">
-            <button class="toggle-bot btn btn-success me-3">
+            <button class="toggle-bot-basic-bot btn btn-success me-3">
                 <i class="bi bi-play-fill"></i> {{ _('Start Bot') }}
             </button>
             <div class="d-flex align-items-center">
                 <span class="me-2">{{ _('Status') }}:</span>
-                <span class="bot-status badge bg-secondary">{{ _('Stopped') }}</span>
+                <span class="bot-status-basic-bot badge bg-secondary">{{ _('Stopped') }}</span>
                 <span class="ml-2">{{ _('Last Error') }}:</span>
-                <span class="last-error-message badge bg-warning"></span>
+                <span class="last-error-message-basic-bot badge bg-warning"></span>
             </div>
         </div>
         
@@ -92,7 +92,13 @@
                     </div>
             </div>
         </div>
-        
+
+        <div class="card shadow-sm w-full bg-primary mt-4" style="visibility: hidden;" id="ContentForTradingBasicBot">
+            <center>
+              <h2 style="color: white;" id="MessageForTradingBasicBot"></h2>
+            </center>
+        </div>      
+
         <!-- Trade History -->
         <div class="mt-4">
             <h4 class="h5 mb-3">{{ _('Trade History') }}</h4>
@@ -114,7 +120,7 @@
                             <th>{{ _('Comment') }}</th>
                         </tr>
                     </thead>
-                    <tbody class="trade-history-body">
+                    <tbody class="trade-history-body-basic-bot">
                         <!-- Trade history will be populated here -->
                         <tr>
                             <td colspan="8" class="text-center">{{ _('No trades found') }}</td>

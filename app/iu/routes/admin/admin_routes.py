@@ -33,7 +33,7 @@ def admin_route():
     tx = wallet.get_list_founds(page=1)
     
     # Balances are now loaded dynamically via JavaScript
-    return render_template("admin/panel.html", transations=tx)
+    return render_template("admin/panel.html", transations=tx, is_admin=(current_user.role == "admin"))
 
 @admin_bp.route("/admin/verify-transaction", methods=["POST"])
 @login_required
