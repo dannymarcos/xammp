@@ -54,8 +54,11 @@
                             symbolElements[i].textContent = symbolObj.symbol;
                         }
                         changeTradingViewSymbol(symbolObj.symbol.split(":")[0].replace("/", ""), exchange);
-                        window.TradingOrderMakerManager["bingx-spot"].refresh();
-                        window.TradingOrderMakerManager["bingx-futures"].refresh();
+                        console.log({
+                            register: window.TradingOrderMakerManager,
+                            exchange
+                        })
+                        window.TradingOrderMakerManager["{{ component_id_suffix }}"].refresh();
                     }
                 });
                 symbolList.appendChild(listItem);

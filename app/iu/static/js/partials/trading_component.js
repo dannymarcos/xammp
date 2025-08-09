@@ -1,14 +1,14 @@
  // --- Configuration ---
-    const API_ENDPOINTS = {
-        getBalance: '/get_account_balance',
-        addOrder: '/add_order',
-        getSymbolPrice: '/get_symbol_price',
-        getUserTrades: '/trades',
-    };
+const API_ENDPOINTS = {
+    getBalance: '/get_account_balance',
+    addOrder: '/add_order',
+    getSymbolPrice: '/get_symbol_price',
+    getUserTrades: '/trades',
+};
 
-        // Get settings from localStorage, fallback to defaults
-    const getTradingSymbol = () => localStorage.getItem('symbol') || 'XBTUSD';
-    const getTradingMode = () => localStorage.getItem('method') || 'spot';
+    // Get settings from localStorage, fallback to defaults
+const getTradingSymbol = () => localStorage.getItem('symbol') || 'XBTUSD';
+const getTradingMode = () => localStorage.getItem('method') || 'spot';
 
  // --- Helper Functions ---
 function showAlert(message, type = 'info') {
@@ -112,57 +112,6 @@ function updateAvailableOptionsToSell(balance) {
         updateSellAvailableBalance(cryptoBalance, selectedCrypto);
     });
 }
-
-function updateBuyMarketPrice(symbol) {
-    // Find the price display elements - they are spans with class 'input-group-text'
-    const buyPriceDisplay = document.querySelectorAll('.buy-price-currency')
-    const sellPriceDisplay = document.querySelector('#sell-price-currency')
-    
-    if (!buyPriceDisplay || !sellPriceDisplay) {
-        console.error("Price display elements not found");
-        return;
-    }
-    
-    // Update with loading indicator
-    buyPriceDisplay.forEach(element => {
-        element.textContent = "Loading...";
-    });
-    sellPriceDisplay.textContent = "Loading...";
-    
-    getSymbolPrice(symbol)
-        .then(price => {
-            if (price) {
-                console.log("Received price:", price);
-                // Extract currency from symbol (e.g., 'XBTUSD' -> 'USD')
-                const currency = symbol
-
-                const priceWithCurrency = `${price} ${currency}`;
-                   buyPriceDisplay.forEach(element => {
-                    element.textContent =priceWithCurrency;
-                });
-                // buyPriceDisplay.textContent = priceWithCurrency;
-                sellPriceDisplay.textContent = priceWithCurrency;
-              
-                
-            } else {
-                console.error("No price received from API");
-                // buyPriceDisplay.textContent = "USD";
-                 buyPriceDisplay.forEach(element => {
-                    element.textContent = "USD";
-                });
-                sellPriceDisplay.textContent = "USD";
-            }
-        })
-        .catch(error => {
-            console.error("Error updating market price:", error);
-            //buyPriceDisplay.textContent = "USD";
-             buyPriceDisplay.forEach(element => {
-                    element.textContent = "USD";
-                });
-            sellPriceDisplay.textContent = "USD";
-        });
-}
-
 
 function updateSellAvailableBalance(availableBalance, currencySymbol) {
     const sellAvblSpan = document.querySelector('#sell-avbl');
@@ -378,19 +327,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Event Listeners ---
-    if (buyButton) {
-        buyButton.addEventListener('click', () => placeOrder('buy'));
-    } else {
-        console.error('Buy button not found');
-    }
-
-    if (sellButton) {
-        sellButton.addEventListener('click', () => placeOrder('sell'));
-    } else {
-        console.error('Sell button not found');
-    }
-
-    buyTotalInput.addEventListener('input', calculateAmountToBuy);
+    if (buyButton) buyButton.addEventListener('click', () => placeOrder('buy'));
+    if (sellButton) sellButton.addEventListener('click', () => placeOrder('sell'));
+    if (buyTotalInput) buyTotalInput.addEventListener('input', calculateAmountToBuy);
 
     // --- Initial Load ---
     // renderAccountBalance();
@@ -399,13 +338,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update market price with the current trading symbol
     const currentSymbol = getTradingSymbol();
     console.log("Initial load with symbol:", currentSymbol);
-    updateBuyMarketPrice(currentSymbol);
-    
-    // Set up an interval to refresh the price periodically (every 30 seconds)
-    setInterval(() => {
-        updateBuyMarketPrice(getTradingSymbol());
-    }, 30000);
-    // --- FUTURES TRADING LOGIC ---
 
     // 1. UI Element References
     const futuresOrderType = document.getElementById('futures-order-type');

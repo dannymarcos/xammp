@@ -1,3 +1,4 @@
+import json
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 import logging, traceback, os, time
@@ -169,14 +170,7 @@ def get_cryptos():
                 return jsonify({"error": "Not supported"}), 500
         elif exchange_name == "spot":
             spot_client = KrakenSpotAPI()
-            data, status = spot_client.get_ticker_kraken()
-            if status != 200:
-                logger.error(f"Spot ticker error: {data}")
-                return jsonify(data), status
-            cryptos, status = spot_client.get_symbol_and_ultimate_price_trade()
-            if status != 200:
-                logger.error(f"Spot symbols error: {cryptos}")
-                return jsonify(cryptos), status
+            cryptos = spot_client.get_symbol_and_ultimate_price_trade()
             return jsonify(cryptos)
         elif exchange_name in ["bingx-spot", "bingx-futures"]:
             cryptos, err = exchange.get_cryptos()
@@ -201,12 +195,16 @@ def get_symbol_price():
             return jsonify({"error": "Symbol not provided"}), 400
         
         exchange = request.args.get('exchange')
-        if exchange == "futures":
+        if exchange == "kraken-futures":
             kraken = ExchangeFactory().create_exchange(name="kraken_future", user_id=current_user.id)
             data = kraken.get_symbol_price(symbol)
+
+            return {"price": data[0], "symbol": symbol}
+        elif exchange == "kraken-spot":
+            kraken = ExchangeFactory().create_exchange(name="kraken_spot", user_id=current_user.id)
+            data = kraken.get_symbol_price(symbol)
             
-            return {"price": data[0], "status": data[1]}
-        
+            return {"price": data[0]["price"], "symbol": symbol}
         elif exchange == "bingx-spot" or exchange == "bingx-futures":
             bingx_client = ExchangeFactory().create_exchange(name="bingx", user_id=current_user.id)
             price, error = bingx_client.get_symbol_price(symbol)
@@ -224,7 +222,6 @@ def get_symbol_price():
         return jsonify(data[0])
 
     except Exception as e:
-        logger.error(f"Error getting cryptocurrencies: {e}")
         return jsonify({"error": str(e)}), 500
 
 @trading_bp.route("/trades", methods=['GET'])
@@ -293,7 +290,7 @@ def add_order():
 
         # Map trading modes to exchange identifiers for balance filtering
         exchange_mapping = {
-            "spot": "kraken_spot",
+            "kraken-spot": "kraken_spot",
             "futures": "kraken_futures", 
             "bingx-spot": "bingx_spot",
             "bingx-futures": "bingx_futures"
@@ -302,77 +299,111 @@ def add_order():
         # Get the exchange identifier for balance filtering
         exchange_id = exchange_mapping.get(trading_mode, "general")
                 
-        if trading_mode == "spot":
+        if trading_mode == "kraken-spot":
             ordertype = data.get("orderType")
             order_direction = data.get("orderDirection")
-            volume = data.get("volume")
-            symbol = data.get("symbol")
+            volume = float(data.get("amount"))
+            symbol = data.get("symbol", "BTC/USD")
             price = data.get("price", 0)
-            return_all_trades = data.get("return_all_trades", False)
             order_made_by = data.get("order_made_by", "user")
-            money_wanted_to_spend = data.get("money_wanted_to_spend")
 
-            
             if order_direction == "buy":
-                required_params = [ordertype, symbol, order_made_by, money_wanted_to_spend]
+                required_params = [ordertype, symbol, order_made_by, volume]
                 if not all(required_params):
                     return jsonify({"error": f"Faltan parámetros requeridos {required_params}"}), 400
             elif order_direction == "sell":
                 required_params = [ordertype, order_direction, volume, symbol, order_made_by]
                 if not all(required_params):
                     return jsonify({"error": f"Faltan parámetros requeridos {required_params}"}), 400
-
-            _symbol_ = data["symbol"].split("USD")[0]
             
-            # Validate master account balance first
-            if data["orderDirection"] == "buy":
-                # Then check user's local balance
-                if not wallet.has_balance_in_currency(money_wanted_to_spend, "USDT", "USDT", "general"):
-                    return jsonify({"error": f"Insufficient USDT balance"}), 400
-
-                # For buy orders, check if master account has enough USDT
-                is_valid, error_msg = validate_master_account_balance(float(money_wanted_to_spend) * price, "USDT", exchange_id)
-                if not is_valid:
-                    return jsonify({"error": error_msg}), 400
-                
-            elif data["orderDirection"] == "sell":
-                # Then check user's local balance
-                if not wallet.has_balance_in_currency(money_wanted_to_spend, _symbol_, _symbol_, exchange_id):
-                    return jsonify({"error": f"Insufficient {_symbol_} balance. Required margin: {money_wanted_to_spend} {_symbol_}"}), 400
-
-                # For sell orders, check if master account has enough of the base currency
-                is_valid, error_msg = validate_master_account_balance(float(money_wanted_to_spend), _symbol_, exchange_id)
-                if not is_valid:
-                    return jsonify({"error": error_msg}), 400
-                
             exchange = ExchangeFactory().create_exchange(name="kraken_spot", user_id=user_id)
-            response = exchange.add_order(ordertype, order_direction, volume, symbol, price, order_made_by, money_wanted_to_spend)
+            
+            # Get current price if not provided
+            if price == 0:
+                print("=== symbol ===")
+                print(symbol)
+                print("=== symbol ===")
+                price_data = exchange.get_symbol_price(symbol)
+                if isinstance(price_data, tuple):
+                    price = price_data[0]
+                else:
+                    price = price_data
+            
+            # Validate user balance
+            # if order_direction == "buy":
+            #     if not wallet.has_balance_in_currency(volume, "USDT", "USDT", "general"):
+            #         return jsonify({"error": f"Insufficient USDT balance. Required: {volume} USDT"}), 400
+                
+                # Validate master account balance
+                # is_valid, error_msg = validate_master_account_balance(volume, "USD", exchange_id)
+                # if not is_valid:
+                #     return jsonify({"error": error_msg}), 400
+            # else:  # sell
+            #     symbol_base = symbol.split("/")[0]
+            #     if not wallet.has_balance_in_currency(volume, symbol_base, symbol_base, exchange_id):
+            #         return jsonify({"error": f"Insufficient {symbol_base} balance. Required: {volume} {symbol_base}"}), 400
+                
+                # Validate master account balance
+                # is_valid, error_msg = validate_master_account_balance(volume, symbol_base, exchange_id)
+                # if not is_valid:
+                #     return jsonify({"error": error_msg}), 400
+            
+            response = exchange.add_order(
+                order_type=ordertype,
+                order_direction=order_direction,
+                volume=volume,
+                symbol=symbol,
+                price=price,
+                order_made_by=order_made_by,
+            )
+
+            if(response[0] is None and "Insufficient funds" in response[1]):
+                return jsonify({"error": "The master account does not have sufficient funds"}), 400
+                
+            order_id = response[0]["id"]
+
+            print("===response===")
+            print(order_id)
+            print("===response===")
+
+            data_for_order =  exchange.get_kraken_order_details(order_id)
+
+            print(data_for_order)
+
+            filled = data_for_order["filled"]
+            cost = data_for_order["cost"]
+            fee = data_for_order["fee"]
+            
+            # Handle response
+            if isinstance(response, tuple):
+                order, error = response
+                if error:
+                    return jsonify({"error": error, "success": False}), 400
+            else:
+                order = response
+                error = None
             
             # Record transaction in wallet if order was successful
-            if response[1] == 200:  # Assuming 200 means success
+            if error is None:
                 try:
-                    # Extract currency from symbol (e.g., "BTCUSDT" -> "USDT")
-                    currency = symbol.split("/")[0]
+                    symbol_base = symbol.split("/")[0]
+                    symbol_base_1 = symbol.split("/")[1]
+                    print("*"*30)
+                    print(symbol_base)
+                    print(symbol)
+                    print(order_direction)
+                    print("*"*30)
                     
                     if order_direction == "buy":
-                        # Record the amount spent in the base currency
-                        wallet_admin.add_found(user_id, calculate_amount_with_commission(float(money_wanted_to_spend), trading_mode, "buy"), currency, exchange_id)
-                        wallet_admin.add_found(user_id, -(money_wanted_to_spend*price), "USDT", "general")
+                        wallet_admin.add_found(user_id, filled - fee[symbol_base], symbol_base, exchange_id)
+                        wallet_admin.add_found(user_id, -cost, "USDT", "general")
                     elif order_direction == "sell":
-                        # Record the amount sold in the base currency
-                        wallet_admin.add_found(user_id, calculate_amount_with_commission(money_wanted_to_spend*price, trading_mode, "sell"), "USDT", "general")
-                        wallet_admin.add_found(user_id, float(money_wanted_to_spend), currency, exchange_id)
+                        wallet_admin.add_found(user_id, -filled, symbol_base, exchange_id)
+                        wallet_admin.add_found(user_id, cost - fee[symbol_base_1], "USDT", "general")
                 except Exception as wallet_error:
                     logger.error(f"Error recording wallet transaction: {wallet_error}")
             
-            if return_all_trades:
-                all_trades = get_all_trades_from_user(user_id)
-            final_res = response[0]
-            if return_all_trades:
-                final_res["all_trades"] = all_trades
-            else:
-                final_res["all_trades"] = []
-            return jsonify(response[0]), response[1]
+            return jsonify({"order": order, "success": True}), 200
         elif trading_mode in ["bingx-spot", "bingx-futures"]:
             symbol_base = data["symbol"].split("/")[0]
             params = {"user_id": current_user.id}
@@ -414,6 +445,10 @@ def add_order():
                     is_valid, error_msg = validate_master_account_balance(amount * leverage, symbol_base, exchange_id)
                     if not is_valid:
                         return jsonify({"error": error_msg}), 400
+            
+            print("#"*30)
+            print(data["symbol"])
+            print("#"*30)
 
             order, fees, price_cripto_in_usdt, cost_in_usdt, fees_currency, status_code = exchange.add_order(
                 leverage=data["leverage"],
@@ -455,7 +490,7 @@ def add_order():
                 logger.error(f"Error recording wallet transaction: {wallet_error}")
             
             return jsonify({"order": order, "success": True})
-        elif trading_mode == "futures":
+        elif trading_mode == "kraken-futures":
             # Validate balance for futures trading
             amount = float(data["amount"])
             leverage = float(data["leverage"])

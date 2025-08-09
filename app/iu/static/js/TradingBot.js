@@ -200,11 +200,14 @@ export class TradingBot {
 			if (!config) return;
 
 			console.info(`Starting trading bot ${this.botId} with config:`, config);
+			// Mostrar el payload que se va a enviar
+			const payload = { ...config, bot_id: this.botId };
+			console.log('[BOT BASIC] Payload enviado en fetch /bot/start_bot_trading:', JSON.stringify(payload, null, 2));
 
 			const response = await fetch("/bot/start_bot_trading", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ ...config, bot_id: this.botId }),
+				body: JSON.stringify(payload),
 			});
 
 			const data = await response.json();
@@ -400,36 +403,36 @@ export class TradingBot {
 					  )}</span>`
 					: "";
 			row.innerHTML = `
-                <td>${trade.order_type || "N/A"} ${newestBadge}</td>
-                <td>${formattedDate}</td>
-                <td class="${directionClass}">${
+				<td>${trade.order_type || "N/A"} ${newestBadge}</td>
+				<td>${formattedDate}</td>
+				<td class="${directionClass}">${
 				trade.order_direction?.toUpperCase() || ""
 			}</td>
-                <td>${trade.symbol || ""}</td>
-                <td class="text-end">${
+				<td>${trade.symbol || ""}</td>
+				<td class="text-end">${
 									trade.price ? parseFloat(trade.price).toFixed(2) : "0.00"
 								}</td>
-                <td class="text-end">${
+				<td class="text-end">${
 									trade.volume ? parseFloat(trade.volume).toFixed(8) : "0.00000000"
 								}</td>
-                <td class="text-end ${
+				<td class="text-end ${
 									trade.status === "closed" ? "text-gray" : "text-success"
 								}">${trade.status || ""}</td>
-                <td class="text-end ${
+				<td class="text-end ${
 									actual_profit > 0 ? "text-success" : "text-danger"
 								}">${actual_profit || 0}</td>
-                <td class="text-end ${
+				<td class="text-end ${
 									actual_profit_usd > 0 ? "text-success" : "text-danger"
 								}">${actual_profit_usd || 0}$</td>
-                <td>${trade.trading_mode}</td>
-                <td>${trade.exchange}</td>
-                <td title="${trade.comment || ""}">${
+				<td>${trade.trading_mode}</td>
+				<td>${trade.exchange}</td>
+				<td title="${trade.comment || ""}">${
 				trade.comment
 					? trade.comment.substring(0, 15) +
 					  (trade.comment.length > 15 ? "..." : "")
 					: ""
 			}</td>
-            `;
+			`;
 
 			fragment.appendChild(row);
 		});
@@ -441,17 +444,17 @@ export class TradingBot {
 			const styleElement = document.createElement("style");
 			styleElement.id = "trade-highlight-styles";
 			styleElement.textContent = `
-                .new-trade-highlight {
-                    position: relative;
-                }
-                .new-trade-animation {
-                    animation: highlightFade 3s ease-out;
-                }
-                @keyframes highlightFade {
-                    0% { background-color: rgba(25, 135, 84, 0.7); }
-                    100% { background-color: rgba(25, 135, 84, 0.2); }
-                }
-            `;
+				.new-trade-highlight {
+					position: relative;
+				}
+				.new-trade-animation {
+					animation: highlightFade 3s ease-out;
+				}
+				@keyframes highlightFade {
+					0% { background-color: rgba(25, 135, 84, 0.7); }
+					100% { background-color: rgba(25, 135, 84, 0.2); }
+				}
+			`;
 			document.head.appendChild(styleElement);
 		}
 	}

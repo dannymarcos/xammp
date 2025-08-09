@@ -140,7 +140,7 @@
                 const res = await getSymbolPriceLOCAL(symbol, CONFIG.exchangeName);
                 currentPrice = res.price;
                 currentSymbol = res.symbol;
-                
+
                 console.log(`Price update for ${CONFIG.exchangeName}:`, res);
                 
                 if (priceSymbolDisplay) {
@@ -338,13 +338,6 @@
 if (!window.refresh_symbols) {
     window.refresh_symbols = function() {
         console.log('Refreshing all trading symbols...');
-        
-        // Refresh all trading order maker instances
-        Object.values(window.TradingOrderMakerManager).forEach(instance => {
-            if (instance && typeof instance.refresh === 'function') {
-                instance.refresh();
-            }
-        });
         
         // You can add other symbol refresh logic here
         // For example, if you have other components that need refreshing

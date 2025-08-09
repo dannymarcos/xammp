@@ -18,7 +18,7 @@ class Application:
         self.app.config.from_object(config_object)
         
         # Set default Babel configuration
-        self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000 # 1 year
+        # self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000 # 1 year
         self.app.config['BABEL_DEFAULT_LOCALE'] = 'en'
         self.app.config['BABEL_DEFAULT_TIMEZONE'] = 'UTC'
         

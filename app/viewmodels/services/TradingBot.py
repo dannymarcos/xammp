@@ -1,7 +1,4 @@
 import logging
-import os
-import signal
-import sys
 import time
 import traceback
 from datetime import datetime
@@ -16,6 +13,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 
+from app.lib.utils.add_order import add_order
 from app.lib.utils.tx import emit
 from app.models.trades import (
     get_open_trades_from_user,
@@ -43,7 +41,6 @@ logger = logging.getLogger(__name__)
 # Configuration Models
 # ----------------------------
 
-
 class TradingConfig(BaseModel):
     """
     Validated trading configuration using Pydantic
@@ -57,6 +54,7 @@ class TradingConfig(BaseModel):
     trading_mode: Literal["spot", "futures"] = Field(
         "spot", description="Trading account type"
     )
+    basic_bot_trading_mode_full: str = Field("", description="Full trading mode for the basic bot ;-;")
     max_active_trades: int = Field(1, ge=1, description="Maximum concurrent positions")
     stop_loss_pct: float = Field(
         0.02, gt=0, lt=0.5, description="Stop loss percentage (0.02 = 2%)"
@@ -110,48 +108,31 @@ class TradingBot:
         type_wallet: str,
         email: str
     ):
-        if hasattr(self, "_initialized"):
-            # logger.debug(f"Bot instance for user {user_id} already initialized, skipping initialization") # Can be noisy
-            return
-        
         self.email = email
-
-        logger.info("Initializing trading bot for user %s", user_id)
-
+        self.user_id = user_id
+        self.exchange = exchange
         try:
+            logger.info("Initializing trading bot for user %s", user_id)
             # Validate configuration
             logger.debug("Validating configuration for user %s", user_id)
             emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Checking your bot settings. Please wait while we validate your configuration..."})
 
             self.config = TradingConfig(**config)
-            self.user_id = user_id
-            # Use the exchange factory to create an actual exchange instance
-            self.exchange = exchange
-            # self.exchange = exchange_factory.create_exchange(
-            #     name=type_wallet, 
-            #     user_id=user_id, 
-            #     trading_mode=self.config.trading_mode
-            # )
+            print("@"*50)
+            print(config)
+            print("@"*50)
 
-            logger.debug("Setting up exchange connection for user %s", user_id)
-
-            # Trading state
-            self.running = False
-            self.active_trades: List[Dict[str, Any]] = (
-                []
-            )  # List of dicts for currently open trades managed by THIS bot instance
-            self.trade_history: List[Dict[str, Any]] = (
-                []
-            )  # List of dicts for completed trades
-            self._initialized = True
-            self._last_update = datetime.now()
-            self.bot_errors: List[str] = []  # List to store recent errors
-            self.signals_history: List[Dict[str, Any]] = (
-                []
-            )  # List to track generated signals and their contributions
-            self.q_table = SimpleQTable(
-                q_table_path=f"q_tables/q_table_{user_id}.csv"
-            )  # User-specific Q-table path
+            # Si la instancia ya estaba inicializada, no re-crear los estados, solo actualizar config
+            if not hasattr(self, "_initialized"):
+                # Trading state
+                self.running = False
+                self.active_trades: List[Dict[str, Any]] = []  # List of dicts for currently open trades managed by THIS bot instance
+                self.trade_history: List[Dict[str, Any]] = []  # List of dicts for completed trades
+                self._last_update = datetime.now()
+                self.bot_errors: List[str] = []  # List to store recent errors
+                self.signals_history: List[Dict[str, Any]] = []  # List to track generated signals and their contributions
+                self.q_table = SimpleQTable(q_table_path=f"q_tables/q_table_{user_id}.csv")  # User-specific Q-table path
+                self._initialized = True
 
             logger.info("✅ Successfully initialized bot for user %s\n%s", user_id, self.config.model_dump_json(indent=4))
             logger.debug("⚙️ Configuration for user %s:\n%s", user_id, self.config.model_dump_json(indent=4))
@@ -330,6 +311,23 @@ class TradingBot:
                 )
                 logger.info(
                     f"🧙 Aggregated Signals: BUY={aggregated_signals['buy']} (Contrib: {buy_contrib}), SELL={aggregated_signals['sell']} (Contrib: {sell_contrib}) | Q-state: {q_state}"
+                )
+                if not aggregated_signals["buy"] and not aggregated_signals["sell"]:
+                    user_msg = "There are currently no market signals.\nThe bot is waiting for a good opportunity to trade."
+                elif aggregated_signals["buy"]:
+                    user_msg = f"The market signal suggests a BUY opportunity! 🚀 (Contributors: {buy_contrib})"
+                elif aggregated_signals["sell"]:
+                    user_msg = f"The market signal suggests a SELL opportunity! 📉 (Contributors: {sell_contrib})"
+                else:
+                    user_msg = "No clear trading signal at the moment. The bot is monitoring the market."
+
+                emit(
+                    email=self.email,
+                    event="bot",
+                    data={
+                        "id": "basic-bot",
+                        "msg": user_msg
+                    }
                 )
 
                 # Track generated signals details for reporting
@@ -589,178 +587,60 @@ class TradingBot:
         return final_aggregated_signals, q_state, contributing_strategies
 
     def _execute_strategy(self, signals: Dict[str, bool], q_state: str):
-        """
-        Executes trading actions based on the aggregated signals.
-        Simplified to act directly on buy/sell flags.
-        """
         current_price = self._get_current_price()
         if current_price is None or current_price <= 0:
             logger.error("Could not get current price for execution logic.")
-            return  # Cannot execute without price
+            return
 
-        # --- Buy Logic ---
-        # Only attempt to buy if a buy signal is true AND we are allowed to open a new trade
-        if signals["buy"]:
-            if len(self.active_trades) >= self.config.max_active_trades:
-                logger.info(
-                    f"Skipping BUY signal: Max active trades ({self.config.max_active_trades}) reached. Current: {len(self.active_trades)}"
-                )
-            else:
-                logger.info(f"➡️ BUY signal received. Attempting to create BUY order.")
-                # In a real bot, you'd use a Limit or Market order based on strategy
-                # Using 'market' as per original code, price param is indicative but not used by exchange for market orders
-                order_result = self._create_order(
-                    "buy", current_price
-                )  # order_result is the serialized DB Trade record
-                if (
-                    order_result
-                    and order_result.get("id")
-                    and order_result.get("order_id")
-                ):  # Check for DB PK and Exchange ID
-                    db_trade_id = order_result["id"]  # Database Primary Key
-                    exchange_order_id = order_result[
-                        "order_id"
-                    ]  # Exchange's Transaction ID
+        max_active_trades = getattr(self.config, "max_active_trades", 1)
+        stop_loss_pct = getattr(self.config, "stop_loss_pct", 0.02)
+        take_profit_pct = getattr(self.config, "take_profit_pct", 0.04)
 
-                    actual_fill_price = order_result.get(
-                        "price", current_price
-                    )  # Price from DB record
-                    trade_amount = order_result.get(
-                        "volume", self.config.trade_amount
-                    )  # Volume from DB record
+        # --- Buy/Sell Logic ---
+        if (signals["buy"] or signals["sell"]) and len(self.active_trades) < max_active_trades:
+            logger.info(f"➡️ BUY signal received. Attempting to create BUY order.")
+            # Calcular stop_loss y take_profit basados en porcentajes
+            stop_loss_price = current_price * (1 - stop_loss_pct)
+            take_profit_price = current_price * (1 + take_profit_pct)
 
-                    # Parse timestamp if it's a string
-                    entry_time_str = order_result.get("timestamp")
-                    entry_time_dt = datetime.now()  # Fallback
-                    if isinstance(entry_time_str, str):
-                        try:
-                            # Attempt to parse ISO format, common for DBs
-                            entry_time_dt = datetime.fromisoformat(
-                                entry_time_str.replace("Z", "+00:00")
-                            )
-                        except ValueError:
-                            try:
-                                # Fallback for other common formats if needed, or log warning
-                                entry_time_dt = datetime.strptime(
-                                    entry_time_str, "%Y-%m-%d %H:%M:%S.%f"
-                                )
-                            except ValueError:
-                                logger.warning(
-                                    f"Could not parse timestamp string: {entry_time_str}. Using current time."
-                                )
-                    elif isinstance(entry_time_str, datetime):
-                        entry_time_dt = entry_time_str
-
-                    # Store details of the new active trade
-                    trade_details: Dict[str, Any] = {
-                        "id": exchange_order_id,  # Exchange's transaction ID for logging/display
-                        "db_trade_id": db_trade_id,  # Our database's primary key for this BUY trade
-                        "order_direction": "buy",
-                        "symbol": order_result.get("symbol", self.config.trading_pair),
-                        "entry_price": actual_fill_price,
-                        "entry_time": entry_time_dt,
-                        "stop_loss": order_result.get(
-                            "stop_loss",
-                            actual_fill_price * (1 - self.config.stop_loss_pct),
-                        ),  # Use DB SL or calculate
-                        "take_profit": order_result.get(
-                            "take_profit",
-                            actual_fill_price * (1 + self.config.take_profit_pct),
-                        ),  # Use DB TP or calculate
-                        "entry_state": q_state,
-                        "amount": trade_amount,
-                    }
-                    self.active_trades.append(trade_details)
-                    print(
-                        f"🎉 TRADE OPENED: BUY {trade_amount:.6f} {self.config.trading_pair} at {actual_fill_price:.6f} (Exchange ID: {exchange_order_id}, DB ID: {db_trade_id})"
-                    )
-                    emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"🚀 A new trade has been opened! You bought {trade_amount:.6f} {self.config.trading_pair} at a price of {actual_fill_price:.6f} 🎉"})
-
-                    logger.info(
-                        f"✅ BUY order placed and tracked: Exchange ID {exchange_order_id}, DB ID {db_trade_id}. Entry Price: {actual_fill_price:.6f}, Amount: {trade_amount}"
-                    )
-
-                else:
-                    logger.warning(
-                        f"❌ Failed to create BUY order or order_result malformed: {order_result}"
-                    )
-                    # An error message would have been added in _create_order
-
-        # --- Sell Logic ---
-        # Only attempt to sell if a sell signal is true AND there are active trades to close
-        # This logic closes ALL active BUY trades on a SELL signal. Adjust if you want to close only one.
-        # Also, Stop Loss and Take Profit checks trigger sells.
-        if signals["sell"] and self.active_trades:
-            logger.info(
-                f"⬅️ SELL signal received. Attempting to close active BUY trades."
+            success, _ = self._create_order(
+                order_direction="buy" if signals["buy"] else "sell",
+                current_price=current_price,
+                order_type="market",
+                leverage=1.0,
+                stop_loss=stop_loss_price,
+                take_profit=take_profit_price,
+                order_made_by="bot",
+                volume=self.config.trade_amount,
+                symbol=self.config.trading_pair
             )
-
-            # Iterate through a copy of the active trades list to avoid issues while removing items
-            # Only consider trades opened as 'buy' for closing with a sell signal
-            trades_to_close = [
-                trade
-                for trade in self.active_trades
-                if trade["order_direction"] == "buy"
-            ]
-
-            if not trades_to_close:
-                logger.debug("SELL signal received, but no active BUY trades to close.")
-                return  # Nothing to sell if no buy trades open
-
-            for trade in trades_to_close:
-                trade_id = trade.get("id", "N/A")
-                logger.info(
-                    f"Attempting to close trade {trade_id} (BUY) with SELL order."
-                )
-                # Use the amount from the active trade details
-                amount_to_sell = trade.get("amount", self.config.trade_amount)
-
-                # Use current_price as the target price for the sell order
-                order_result = self._create_order(
-                    "sell", current_price
-                )  # This is the serialized SELL DB record
-
-                if (
-                    order_result
-                    and order_result.get("id")
-                    and order_result.get("order_id")
-                ):
-                    sell_db_id = order_result["id"]  # DB PK of the SELL order
-                    sell_exchange_id = order_result[
-                        "order_id"
-                    ]  # Exchange ID of the SELL order
-
-                    actual_exit_price = order_result.get(
-                        "price", current_price
-                    )  # Actual fill price of the SELL
-
-                    logger.info(
-                        f"✅ SELL order (DB ID: {sell_db_id}, Exch ID: {sell_exchange_id}) placed to close BUY trade (Exch ID: {trade_id})"
+            if success:
+                trade_amount = getattr(self.config, "trade_amount", 0)
+                trading_pair = getattr(self.config, "trading_pair", "Unknown")
+                if signals["buy"]:
+                    logger.info(f"🎉 TRADE OPENED: BUY {current_price:.6f}")
+                    emit(
+                        email=self.email,
+                        event="bot",
+                        data={
+                            "id": "basic-bot",
+                            "msg": f"🚀 New trade opened! Bought {trade_amount:.6f} "
+                                   f"{trading_pair} at {current_price:.6f} 🎉"
+                        }
                     )
-                    emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"Great news! A SELL order was placed to close your BUY trade"})
-
-                    # Record the trade result, passing the original BUY trade details and the DB ID of the new SELL trade
-                    self._record_trade_result(
-                        buy_trade_details=trade,
-                        exit_price=actual_exit_price,
-                        reason="sell_signal",
-                        sell_order_db_id=sell_db_id,
+                elif signals["sell"]:
+                    logger.info(f"🎉 TRADE OPENED: SELL {current_price:.6f}")
+                    emit(
+                        email=self.email,
+                        event="bot",
+                        data={
+                            "id": "basic-bot",
+                            "msg": f"📉 New trade opened! Sold {trade_amount:.6f} "
+                                   f"{trading_pair} at {current_price:.6f} 📉"
+                        }
                     )
-
-                    # Remove the trade from the live active trades list
-                    try:
-                        self.active_trades.remove(trade)
-                    except ValueError:
-                        logger.warning(
-                            f"Trade {trade_id} not found in active trades list during removal after SELL signal."
-                        )
-
-                else:
-                    logger.warning(
-                        f"❌ Failed to create SELL order to close trade {trade_id}."
-                    )
-                    # Error added in _create_order
-                    # Decide how to handle failure to close a trade here.
+            else:
+                logger.warning("❌ Failed to create BUY order")
 
     def _check_risk_management(self):
         """
@@ -801,23 +681,27 @@ class TradingBot:
                     )
                     logger.warning(f"Stop loss triggered for trade {trade_id}")
 
+                    order_type = getattr(self.config, "order_type", "market")
+                    leverage = float(getattr(self.config, "leverage", 1.0))
+                    order_made_by = "bot"
                     order_result = self._create_order(
-                        "sell", current_price
-                    )  # This is the serialized SELL DB record
-
+                        order_direction="sell",
+                        current_price=current_price,
+                        order_type=order_type,
+                        leverage=leverage,
+                        stop_loss=stop_loss,
+                        take_profit=take_profit,
+                        order_made_by=order_made_by
+                    )
+                    order_data = order_result[1] if order_result else None
                     if (
-                        order_result
-                        and order_result.get("id")
-                        and order_result.get("order_id")
+                        order_data
+                        and order_data.get("id")
+                        and order_data.get("order_id")
                     ):
-                        sell_db_id = order_result["id"]  # DB PK of the SELL order
-                        sell_exchange_id = order_result[
-                            "order_id"
-                        ]  # Exchange ID of the SELL order
-                        actual_exit_price = order_result.get(
-                            "price", current_price
-                        )  # Actual fill price of the SELL
-
+                        sell_db_id = order_data["id"]  # DB PK of the SELL order
+                        sell_exchange_id = order_data["order_id"]  # Exchange ID of the SELL order
+                        actual_exit_price = order_data.get("price", current_price)  # Actual fill price of the SELL
                         logger.info(
                             f"✅ SELL order (DB ID: {sell_db_id}, Exch ID: {sell_exchange_id}) placed for SL on BUY trade (Exch ID: {trade_id})"
                         )
@@ -827,8 +711,6 @@ class TradingBot:
                             reason="stop_loss",
                             sell_order_db_id=sell_db_id,
                         )
-
-                        # Remove the trade from the live active trades list
                         try:
                             self.active_trades.remove(trade)
                         except ValueError:
@@ -851,23 +733,27 @@ class TradingBot:
                     )
                     logger.info(f"Take profit triggered for trade {trade_id}")
 
+                    order_type = getattr(self.config, "order_type", "market")
+                    leverage = float(getattr(self.config, "leverage", 1.0))
+                    order_made_by = "bot"
                     order_result = self._create_order(
-                        "sell", current_price
-                    )  # This is the serialized SELL DB record
-
+                        order_direction="sell",
+                        current_price=current_price,
+                        order_type=order_type,
+                        leverage=leverage,
+                        stop_loss=stop_loss,
+                        take_profit=take_profit,
+                        order_made_by=order_made_by
+                    )
+                    order_data = order_result[1] if order_result else None
                     if (
-                        order_result
-                        and order_result.get("id")
-                        and order_result.get("order_id")
+                        order_data
+                        and order_data.get("id")
+                        and order_data.get("order_id")
                     ):
-                        sell_db_id = order_result["id"]  # DB PK of the SELL order
-                        sell_exchange_id = order_result[
-                            "order_id"
-                        ]  # Exchange ID of the SELL order
-                        actual_exit_price = order_result.get(
-                            "price", current_price
-                        )  # Actual fill price of the SELL
-
+                        sell_db_id = order_data["id"]  # DB PK of the SELL order
+                        sell_exchange_id = order_data["order_id"]  # Exchange ID of the SELL order
+                        actual_exit_price = order_data.get("price", current_price)  # Actual fill price of the SELL
                         logger.info(
                             f"✅ SELL order (DB ID: {sell_db_id}, Exch ID: {sell_exchange_id}) placed for TP on BUY trade (Exch ID: {trade_id})"
                         )
@@ -877,8 +763,6 @@ class TradingBot:
                             reason="take_profit",
                             sell_order_db_id=sell_db_id,
                         )
-
-                        # Remove the trade from the live active trades list
                         try:
                             self.active_trades.remove(trade)
                         except ValueError:
@@ -891,106 +775,79 @@ class TradingBot:
                         )
                         self._add_bot_error(f"Failed TP order: {trade_id}")
 
-    def _create_order(self, side: str, price: float) -> Optional[Dict]:
-        """
-        Creates a MARKET order using the KrakenAPI instance.
-        Logs errors and adds them to bot errors list.
-        Returns the order response dictionary on success, None on failure.
-        Assumes KrakenAPI add_order handles amount in base currency.
-        """
-        try:
-            # Ensure amount is positive and reasonable (e.g., not zero)
-            amount_to_trade = self.config.trade_amount
-            if amount_to_trade <= 0:
-                logger.error(
-                    f"Trade amount is zero or negative ({amount_to_trade}). Cannot create order."
-                )
-                self._add_bot_error(f"Invalid trade amount: {amount_to_trade}")
-                return None
+    def _create_order(self, order_direction: str, current_price: float = None, order_type: str = "market", leverage: float = 1.0, stop_loss: float = None, take_profit: float = None, order_made_by: str = "bot", volume: float = None, symbol: str = None):
+        user_id = getattr(self, "user_id", None)
+        trading_mode = getattr(self.config, "basic_bot_trading_mode_full", "spot")
+        symbol = getattr(self.config, "trading_pair", None)
 
-            logger.info(
-                f"💵 Attempting to create MARKET {side.upper()} order for {amount_to_trade} {self.config.trading_pair}"
-            )
+        if not symbol:
+            logger.error("Symbol not defined in trading bot")
+            return False, None
 
-            # The price parameter here is not used by Kraken for MARKET orders,
-            # but is kept in the signature as it was in the original code.
-            # The actual fill price will be in the response or fetched later.
+        trade_amount = float(getattr(self.config, "trade_amount", 0))
+        if trade_amount <= 0:
+            logger.error(f"Invalid trade amount: {trade_amount}. Must be positive number")
+            return False, None
 
-            ### CHANGE KRAKEN_API AND BINGXEXCHANGE
-            volume = 0.0001 if self.config.trade_amount < 0.001 else self.config.trade_amount
-            
-            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Placing a new order for you. Please wait while we process it!"})
-            order_result = self.exchange.add_order(side,self.config.trading_pair,volume)
-
-            # Handle tuple response (order_data, status_code)
-            if isinstance(order_result, tuple):
-                order_data, status_code = order_result
+        # Construir el diccionario data
+        data = {
+            "trading_mode": trading_mode,
+            "orderDirection": order_direction,
+            "symbol": symbol,
+            "order_made_by": order_made_by,
+            "orderType": order_type,
+            "volume": volume,
+            "symbol": symbol,
+            "amount": trade_amount,
+            "leverage": leverage
+        }
+                
+        if trading_mode == "kraken_futures":
+            if order_direction == "buy":
+                data["money_wanted_to_spend"] = trade_amount
             else:
-                order_data = order_result
-                status_code = 200
+                data["volume"] = trade_amount
+                
+            data["price"] = current_price * trade_amount
+                
+        else:  # Futures o BingX
+            data["amount"] = trade_amount
+            data["leverage"] = leverage
+            data["stopLoss"] = stop_loss if stop_loss is not None else 0
+            data["takeProfit"] = take_profit if take_profit is not None else 0
 
-            # order_data, _ = self.exchange.add_order(
-            #     order_type="market",  # Using market orders as per original code logic
-            #     order_direction=side,
-            #     volume=amount_to_trade,  # Amount to trade (base currency)
-            #     symbol=self.config.trading_pair,
-            #     order_made_by="bot",
-            # )
-
-            if not order_data:
-                error = order_data["error"]
-                # kraken_api is expected to return (None, error_string) or (error_dict, None)
-                # Handle different potential error formats from kraken_api
-                emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Oops! We couldn't place your order this time"})
-                error_message = (
-                    str(error)
-                    if isinstance(error, Exception)
-                    else str(error) if error else "Unknown API error"
-                )
-                logger.error(f"KrakenAPI Error creating {side} order: {error_message}")
-                self._add_bot_error(f"API Order Failed ({side}): {error_message}")
-                return None
-
-            # Check the structure of kraken_api's success response
-            # Assuming it returns a dictionary including 'id' and potentially 'price' (fill price)
-            if order_data and isinstance(order_data, dict) and "id" in order_data:
-                logger.info(
-                    f"✅ {side.upper()} order placed successfully: {order_data['id']}"
-                )
-                emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Your order has been placed successfully! 🎉"})
-                # Return the order_data received from the API, which should include the fill price for market orders
-                return order_data
-            else:
-                logger.error(
-                    f"API returned unexpected success response structure for {side} order: {order_data}"
-                )
-                self._add_bot_error(
-                    f"API Order Succeeded but response bad ({side}): {order_data}"
-                )
-                return None  # Indicate failure due to bad response structure
-
-        except Exception as e:
-            logger.error(f"❌ Exception creating {side} order: {str(e)}")
-            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Sorry, something went wrong while placing your order"})
-            traceback.print_exc()
-            self._add_bot_error(f"Exception creating {side} order: {e}")
-            return None
+        # Llamar a la función add_order
+        print(f"[TradingBot._create_order] user_id={user_id}")
+        print(f"[TradingBot._create_order] data={data}")
+        print(f"[TradingBot._create_order] trading_mode={trading_mode}")
+        success = add_order(user_id=user_id, data=data, trading_mode=trading_mode)
+        return success, None
 
     def _get_current_price(self) -> Optional[float]:
         """Get current market price using ccxt ticker."""
         try:
-            # Fetching the ticker gives the last traded price quickly
-            ticker = self.exchange.fetch_ticker(self.config.trading_pair)
-            price = float(ticker.get("last"))  # Use .get for safety
-            if price is None or price <= 0:
-                logger.warning(
-                    f"Fetched invalid price for {self.config.trading_pair}: {price}"
-                )
-                return None
-            # logger.debug(f"Fetched current price for {self.config.trading_pair}: {price:.6f}") # Can be noisy
+            current_price = self.exchange.get_symbol_price(self.config.trading_pair)
+            if isinstance(current_price, tuple):
+                price_data = current_price[0]
+                if isinstance(price_data, dict):
+                    if "error" in price_data and price_data["error"]:
+                        raise Exception(f"Error getting price: {price_data['error']}")
+                    if "price" in price_data:
+                        price = price_data["price"]
+                    else:
+                        price = price_data
+                else:
+                    price = price_data
+            else:
+                price = current_price
+
+            # Ensure price is a valid number
+            if not isinstance(price, (int, float)) or price is None:
+                raise Exception(f"Invalid price received: {price}")
+
             return price
         except Exception as e:
-            # logger.error(f"❌ Failed to get current price for {self.config.trading_pair}: {str(e)}") # Can be noisy if frequent
+            logger.error(f"❌ Error al obtener el precio actual para {self.config.trading_pair}: {str(e)}")
             self._add_bot_error(f"Failed to get price: {e}")
             return None
 

@@ -1,7 +1,9 @@
+import logging
 import random
 import threading
 import random
 import time
+from app.lib.utils.add_order import add_order
 from app.lib.utils.tx import emit
 from app.viewmodels.services.TradingBot import TradingConfig
 from app.models.strategies import get_strategy_by_id
@@ -19,6 +21,7 @@ ppo_agent = DeepSeekPPOAgent(
     input_dim=input_dim,
     output_dim=output_dim
 )
+logger = logging.getLogger(__name__)
 
 class StrategyTradingBot:
     def __init__(self, user_id, exchange: Exchange, config: dict, type_wallet: str, email: str):
@@ -51,7 +54,7 @@ class StrategyTradingBot:
             emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Our AI assistant is analyzing the market and preparing your next trading move"})
             decision = self.interact_with_llm(strategy)
             emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Our AI assistant suggests to '{decision.upper()}'"})
-            self.execute_action(decision)
+            self.execute_action("buy")
 
     def get_strategy(self):
         # Simulate fetching a trading strategy from a database.
@@ -104,16 +107,40 @@ class StrategyTradingBot:
 
     def execute_action(self, decision):
         # Based on the LLM's simulated decision:
-        try:
-            if decision == "buy":
-                self.execute_buy_order()
-            elif decision == "sell":
-                self.execute_sell_order()
-            else:
-                self.wait()
-        except Exception as e:
-            print(f"Error executing action: {e}")
+        if(decision == "wait"):
+            return
 
+        data = {
+            "orderType": "market",
+            "orderDirection": decision,
+            "amount": self.config.trade_amount,
+            "symbol": self.config.trading_pair,
+            "order_made_by": "bot",
+        }
+        
+        if self.config.basic_bot_trading_mode_full in ["kraken_spot", "kraken_futures"]:
+            price_data = self.exchange.get_symbol_price(self.config.trading_pair)
+            if isinstance(price_data, tuple):
+                if isinstance(price_data[0], dict) and 'price' in price_data[0]:
+                    price = price_data[0]['price']
+                else:
+                    price = price_data[0]
+            else:
+                price = price_data
+
+            data["price"] = price * self.config.trade_amount
+        if self.config.basic_bot_trading_mode_full in ["kraken_futures", "bingx_spot", "bingx_futures"]:
+            data["leverage"] = 1.0
+            data["stopLoss"] = None
+            data["takeProfit"] = None
+
+        success = add_order(user_id=self.user_id, data=data, trading_mode=self.config.basic_bot_trading_mode_full)
+        if not success:
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Not enough funds (main exchange) to place your buy order"})
+            return
+        
+        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Buy order placed. You're all set!"})
+        
     def execute_buy_order(self):
         base_currency, quote_currency = self.config.trading_pair.split("/")
         

@@ -55,6 +55,8 @@ def start_bot_trading():
         logger.info(f"Received start_bot_trading request for bot_id: {bot_id} by user_id: {user_id} and strategy_id: {selected_strategy_id}")
         # TODO: Implement logic for bot_id
 
+        print(request.get_json())
+
         current_bot_status = None
         
         if bot_id == "strategy-bot" and selected_strategy_id == "":
@@ -75,8 +77,8 @@ def start_bot_trading():
         # Validar balance en la wallet del usuario
         trade_amount = float(data.get('amount', 0.01))
         trading_pair = data.get('symbol', 'XBTUSD')
-        # Determinar la moneda a usar (ej: USDT para BTC/USDT)
-        
+
+        # Determinar la moneda a usar (ej: USDT para BTC/USDT)        
         quote_currency = trading_pair.split("/")[1] # USDT
         base_currency = trading_pair.split("/")[0] # BTC
         wallet = Wallet(user_id)
@@ -84,6 +86,12 @@ def start_bot_trading():
         type_exchange: str = data.get("exchange")
         type_exchange_trading_mode: str = type_exchange+"_"+trading_mode
         type_exchange_trading_mode = type_exchange_trading_mode.lower()
+        
+        # Permitir tener el symbol correcto para cada caso
+        if type_exchange_trading_mode == "kraken_spot":       trading_pair = "BTC/USD"
+        elif type_exchange_trading_mode == "kraken_futures":  trading_pair = "BTC/USD:USD"
+        elif type_exchange_trading_mode == "bingx_spot":      trading_pair = "BTC/USDT"
+        elif type_exchange_trading_mode == "bingx_futures":   trading_pair = "BTC/USDT:USDT"
 
         # Create configuration for the bot
         config = {
@@ -91,22 +99,36 @@ def start_bot_trading():
             'timeframe': data.get('timeframe', '1h'),
             'trade_amount': trade_amount,
             'trading_mode': trading_mode,
+            'basic_bot_trading_mode_full': type_exchange_trading_mode,
             'max_active_trades': data.get('max_active_trades', 1),
             'stop_loss_pct': data.get('stop_loss_pct', 0.02),
             'take_profit_pct': data.get('take_profit_pct', 0.04),
             'strategy_id': selected_strategy_id
         }
-        # Initialize the appropriate Kraken API client
 
-        # Ejemplo de uso en cualquier archivo
-
-        # Enviar un evento a un usuario específico
+        print("@"*30)
+        print(config)
+        print("@"*30)
+        
         emit(email=current_user.email, event="bot", data={"id": bot_id, "msg": "Start bot"})
         
         name = "bingx" if type_exchange == "bingx" else ("kraken_spot" if trading_mode == "spot" else "kraken_future")
+
         exchange = ExchangeFactory().create_exchange(name=name, user_id=user_id)
         
         price = get_current_price(exchange, trading_pair)
+        if isinstance(price, dict):
+            # If price is a dictionary, try to extract the numeric value
+            price_value = price.get("price")
+            if price_value is None:
+                # If no "price" key is found, raise an error
+                raise ValueError(f"Invalid price response: {price}. Symbol: {trading_pair}")
+            price = price_value
+        elif price is None:
+            # If price is None, raise an error
+            raise ValueError("Invalid price response")
+
+        # Now you can safely perform the multiplication
         amount_in_usdt = trade_amount * price
 
         quote_currency = "USDT" if quote_currency == "USD" else quote_currency
@@ -135,6 +157,7 @@ def start_bot_trading():
         logger.debug(f"Error details: {traceback.format_exc()}")
         current_bot_status = "error"
         update_user_bot_status(current_user.id, current_bot_status, bot_id)
+        traceback.print_exc()
         return jsonify({"error": str(e), "bot_status": current_bot_status}), 500
 
 @bot_bp.route("/bot/stop_bot_trading", methods=['POST'])

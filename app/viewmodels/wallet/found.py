@@ -692,25 +692,18 @@ class WalletAdmin:
             def fetch_kraken_spot():
                 try:
                     exchange = KrakenSpotExchange(user_id="master")
-                    spot_balance_data, status = exchange.get_account_balance()
-                    balances = []
-                    if status == 200 and isinstance(spot_balance_data, dict):
-                        # El resultado real está en spot_balance_data['result']
-                        result = spot_balance_data.get('result', {})
-                        for currency, amount in result.items():
-                            balances.append({
-                                "currency": currency,
-                                "amount": float(amount)
-                            })
+                    spot_balance_data = exchange.get_account_balance()
+
+                    if isinstance(spot_balance_data, list):
+                        balances_with_prices = []
+                        for balance in spot_balance_data:
+                            balance_with_price = balance.copy()
+                            balances_with_prices.append(balance_with_price)
+                        
                         real_balances["kraken_spot"] = {
                             "error": None,
-                            "balances": balances,
+                            "balances": balances_with_prices,
                             "raw_data": spot_balance_data
-                        }
-                    else:
-                        real_balances["kraken_spot"] = {
-                            "error": f"API Error: {spot_balance_data.get('error', 'Unknown error')}",
-                            "balances": []
                         }
                 except Exception as e:
                     real_balances["kraken_spot"] = {

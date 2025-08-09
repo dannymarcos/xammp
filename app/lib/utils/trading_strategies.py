@@ -220,7 +220,7 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ]
 
     # Drop NA only in the specified indicator columns to keep valid rows where calculations were possible
-    df_copy.dropna(subset=indicator_cols_to_check_na, inplace=True)
+    # df_copy.dropna(subset=indicator_cols_to_check_na, inplace=True)
 
     return df_copy[all_cols]  # Return with a consistent column order and cleaned data
 

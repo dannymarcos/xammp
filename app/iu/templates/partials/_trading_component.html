@@ -8,10 +8,10 @@
         <!-- Top Tabs (Spot, Cross, etc.) -->
         <ul class="nav nav-tabs mb-3" id="tradeTypeTab" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="spot-tab" data-bs-toggle="tab" data-bs-target="#spot-tab-pane" type="button" role="tab" aria-controls="spot-tab-pane" aria-selected="true">{{ _('Spot') }}</button>
+                <button class="nav-link active" id="spot-tab" data-bs-toggle="tab" data-bs-target="#spot-tab-pane" type="button" role="tab" aria-controls="spot-tab-pane" aria-selected="true">{{ _('Kraken Spot') }}</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="futures-tab" data-bs-toggle="tab" data-bs-target="#futures-tab-pane" type="button" role="tab" aria-controls="futures-tab-pane" aria-selected="false">{{ _('Futures') }}</button>
+                <button class="nav-link" id="futures-tab" data-bs-toggle="tab" data-bs-target="#futures-tab-pane" type="button" role="tab" aria-controls="futures-tab-pane" aria-selected="false">{{ _('Kraken Futures') }}</button>
             </li>
            <li class="nav-item" role="presentation">
                 <button class="nav-link" id="bingx-spot-tab" data-bs-toggle="tab" data-bs-target="#bingx-spot-tab-pane" type="button" role="tab" aria-controls="bingx-spot-tab-pane" aria-selected="false">{{ _('Bingx Spot') }}</button>
@@ -23,244 +23,17 @@
         <div class="tab-content" id="tradeTypeTabContent">
             <!-- Spot Tab -->
             <div class="tab-pane fade show active" id="spot-tab-pane" role="tabpanel" aria-labelledby="spot-tab" tabindex="0">
-
-                <!-- Sub Tabs (Futures, Market, etc.) & Other Options -->
-                <div class="d-flex flex-wrap align-items-center justify-content-between mb-4">
-                    <!-- <ul class="nav nav-pills nav-pills-sm mb-2 mb-md-0"> 
-                        <li class="nav-item me-1">
-                            <a class="nav-link active small py-1 px-2" href="#">{{ _('Market') }}</a>
-                        </li>
-                    </ul> -->
-                    <div class="d-flex align-items-center gap-3 text-muted small">
-                        <span>% {{ _('Fee Level') }}</span>
-                        <span><i class="bi bi-gear"></i> {{ _('Auto-Invest') }}</span> <!-- Added an icon example -->
-                        <span><i class="bi bi-credit-card"></i> {{ _('Buy with EUR') }}</span>
-                    </div>
-                </div>
-
-                <!-- Buy/Sell Forms -->
-                <div class="row g-4">
-                    <!-- Buy Section -->
-                    <div class="col-lg-6">
-                        <div class="border rounded p-3">
-                            <div class="mb-3">
-                                <label for="buy-price" class="form-label small">{{ _('Price') }}</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" id="buy-price" value="{{ _('Market Price') }}" disabled>
-                                    <span id="buy-price-currency" class="input-group-text buy-price-currency">DUMMY USDT</span>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="buy-total" class="form-label small">{{ _('Total Currency') }}</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" class="form-control" id="buy-total" placeholder="0.00">
-                                    <select class="form-select flex-grow-0 w-auto" id="buy-currency">
-                                        <option selected>USDT</option>
-                                        <option>EUR</option>
-                                        <option>USD</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <!-- Slider Placeholder -->
-                           <!--  <div class="mb-3 pt-2">
-                                <input type="range" class="form-range" min="0" max="100" step="25" id="buy-slider" value="0">
-                                <div class="d-flex justify-content-between small text-muted mt-1">
-                                    <span>0%</span>
-                                    <span>25%</span>
-                                    <span>50%</span>
-                                    <span>75%</span>
-                                    <span>100%</span>
-                                </div>
-                            </div> -->
-
-                            <!-- Info Section -->
-                            <div class="small text-muted border-top pt-3 mt-3">
-                                <div class="d-flex justify-content-between mb-1">
-                                    <span>{{ _('Available') }}</span>
-                                    <span id="buy-avbl" class="font-monospace"><button class="btn btn-link btn-sm p-0 ms-1">+</button></span>
-                                </div>
-                                <!-- Extra info -->
-                                <!-- <div class="d-flex justify-content-between mb-1">
-                                    <span>{{ _('Max Buy') }}</span>
-                                    <span class="font-monospace">0.00007 DUMMY BTC</span>
-                                </div>
-                                <div class="d-flex justify-content-between">
-                                    <span>{{ _('Est. Fee') }}</span>
-                                    <span class="font-monospace">0.00000003 DUMMY BTC</span>
-                                </div> -->
-                            </div>
-
-
-                            <!-- Buy Button -->
-                            <div class="d-grid mt-4">
-                                <button type="button" class="btn btn-success">
-                                    {{ _('Buy') }}
-                                </button>
-                            </div>
-
-                            <!-- Preview -->
-                            <div class="border-top pt-3 mt-3">
-                                <div class="d-flex justify-content-between mb-1">
-                                    <span>{{ _('Amount Received') }}</span>
-                                    <span id="buy-amount-recived" class="font-monospace"></span>
-                                </div>
-                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Sell Section -->
-                    <div class="col-lg-6">
-                        <div class="border rounded p-3">
-                            <div class="mb-3">
-                                <label for="sell-price" class="form-label small">{{ _('Price') }}</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control" id="sell-price" value="{{ _('Market Price') }}" disabled>
-                                    <span id="sell-price-currency" class="input-group-text">DUMMY USDT</span>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="sell-amount" class="form-label small">{{ _('Amount') }}</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="number" class="form-control" id="sell-amount" placeholder="0.000000">
-                                    <select class="form-select flex-grow-0 w-auto" id="sell-currency">
-                                        <option selected>DUMMY BTC</option>
-                                        <option>ETH</option>
-                                        <option>SOL</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <!-- Slider Placeholder -->
-                            <!-- <div class="mb-3 pt-2">
-                                <input type="range" class="form-range" min="0" max="100" step="25" id="sell-slider" value="0">
-                                <div class="d-flex justify-content-between small text-muted mt-1">
-                                    <span>0%</span>
-                                    <span>25%</span>
-                                    <span>50%</span>
-                                    <span>75%</span>
-                                    <span>100%</span>
-                                </div>
-                            </div> -->
-
-                            <!-- Info Section -->
-                            <div class="small text-muted border-top pt-3 mt-3">
-                                <div class="d-flex justify-content-between mb-1">
-                                    <span>{{ _('Available') }}</span>
-                                    <span id="sell-avbl" class="font-monospace">0.00000000 DUMMY BTC <button class="btn btn-link btn-sm p-0 ms-1">+</button></span>
-                                </div>
-                                <!-- Extra info -->
-                               <!--  <div class="d-flex justify-content-between mb-1">
-                                    <span>{{ _('Max Sell') }}</span>
-                                    <span class="font-monospace">0.00000000 DUMMY BTC</span>
-                                </div>
-                                <div class="d-flex justify-content-between">
-                                    <span>{{ _('Est. Fee') }}</span>
-                                    <span class="font-monospace">0 DUMMY USDT</span>
-                                </div> -->
-                            </div>
-
-                            <!-- Sell Button -->
-                            <div class="d-grid mt-4">
-                                <button type="button" class="btn btn-danger">
-                                    {{ _('Sell BTC') }}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div> <!-- End Buy/Sell Row -->
+                {{ symbol_search_bar.render_symbol_bar('spot', 'kraken-spot') }}
+                {{ acc_balance.render_account_balance('spot', 'kraken-spot') }}
+                {{ trading_order_maker.render_trading_order_maker('spot', 'kraken-spot') }}
             </div> 
             <!-- End Spot Tab Pane -->
 
             <!-- Placeholder Kraken 🐙 -->
             <div class="tab-pane fade" id="futures-tab-pane" role="tabpanel" aria-labelledby="futures-tab" tabindex="0">
                 {{ symbol_search_bar.render_symbol_bar('futures', 'kraken-futures') }}
-                {{acc_balance.render_account_balance('futures', 'kraken-futures')}}
-                <div class="row g-4">
-                    <div class="col-lg-12">
-                        <div class="border rounded p-3">
-                            <div class="row g-3">
-                                <!-- Order Type: Market / Limit -->
-                                <div class="col-md-3">
-                                    <label class="form-label small">{{ _('Order Type') }}</label>
-                                    <select class="form-select form-select-sm" id="futures-order-type">
-                                        <option value="market">{{ _('Market') }}</option>
-                                    </select>
-                                </div>
-                                <!-- Leverage -->
-                               <!--  <div class="col-md-3">
-                                    <label class="form-label small">{{ _('Leverage') }}</label>
-                                    <select class="form-select form-select-sm" id="futures-leverage" disabled>
-                                        <option value="1">1x</option>
-                                        <option value="2">2x</option>
-                                        <option value="5">5x</option>
-                                        <option value="10">10x</option>
-                                        <option value="20">20x</option>
-                                    </select>
-                                </div> -->
-                                <!-- Margin Required -->
-                               <!--  <div class="col-md-3">
-                                    <label class="form-label small">{{ _('Margin Required') }}</label>
-                                    <input type="text" class="form-control form-control-sm" id="futures-margin-required" value="0.00 USDT" disabled>
-                                </div> -->
-                                <!-- Symbol (dummy) -->
-                               <div class="col-md-3">
-                                    <label class="form-label small">{{ _('Symbol') }}</label>
-                                    <div class="form-control form-control-sm disabled bg-body-secondary">
-                                        <span class="symbol-selected-kraken-futures"></span>
-                                        <span id="symbol-price-futures">--.--</span>
-                                    </div>  <!-- CORRECTED closing tag -->
-                                    <input hidden type="text" class="form-control form-control-sm" id="futures-symbol" value="BTCUSD" disabled>
-                                </div>
-                            </div>
-                            <div class="row g-3 mt-2">
-                                <!-- Entry Price (for limit) -->
-                                <!-- <div class="col-md-3">
-                                    <label class="form-label small">{{ _('Entry Price') }}</label>
-                                    <span class="buy-price-currency"></span>
-                                    <input type="number" class="form-control form-control-sm" id="futures-entry-price" placeholder="{{ _('Market Price') }}">
-                                </div> -->
-                                <!-- Amount -->
-                                <div class="col-md-3">
-                                    <label class="form-label small">{{ _('Amount') }}</label>
-                                    <input type="number" class="form-control form-control-sm" id="futures-amount" placeholder="0.000">
-                                </div>
-                                <!-- Stop Loss -->
-                                <div class="col-md-3">
-                                    <label class="form-label small">{{ _('Stop Loss') }}</label>
-                                    <input type="number" class="form-control form-control-sm" id="futures-stop-loss" placeholder="0.00">
-                                </div>
-                                <!-- Take Profit -->
-                                <div class="col-md-3">
-                                    <label class="form-label small">{{ _('Take Profit') }}</label>
-                                    <input type="number" class="form-control form-control-sm" id="futures-take-profit" placeholder="0.00">
-                                </div>
-                            </div>
-                            <div class="row g-3 mt-3">
-                                <!-- Action Buttons -->
-                                <div class="col-md-3 d-grid">
-                                    <button type="button" class="btn btn-success" id="futures-open-long">{{ _('Open Long') }}</button>
-                                </div>
-                                <div class="col-md-3 d-grid">
-                                    <button type="button" class="btn btn-danger" id="futures-open-short">{{ _('Open Short') }}</button>
-                                </div>
-                               <!--  <div class="col-md-3 d-grid">
-                                    <button type="button" class="btn btn-outline-success" id="futures-close-long">{{ _('Close Long') }}</button>
-                                </div>
-                                <div class="col-md-3 d-grid">
-                                    <button type="button" class="btn btn-outline-danger" id="futures-close-short">{{ _('Close Short') }}</button>
-                                </div> -->
-                            </div>
-                            <div class="row mt-3">
-                                <div class="col-12">
-                                    <div class="alert alert-info small mb-0" id="futures-info-alert">
-                                       
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                {{ acc_balance.render_account_balance('futures', 'kraken-futures') }}
+                {{ trading_order_maker.render_trading_order_maker('futures', 'kraken-futures') }}
             </div>
 
             <!-- Placeholder Kraken 🐙 -->
@@ -275,7 +48,7 @@
 
              <!-- Bingx Futures 🔷⏰ -->
             <div class="tab-pane fade" id="bingx-futures-tab-pane" role="tabpanel" aria-labelledby="bingx-futures-tab" tabindex="0">
-               {{ symbol_search_bar.render_symbol_bar('bingx-futures', 'bingx-futures') }}
+                {{ symbol_search_bar.render_symbol_bar('bingx-futures', 'bingx-futures') }}
                 {{ acc_balance.render_account_balance('bingx-futures', 'bingx-futures') }}
                 {{ trading_order_maker.render_trading_order_maker('futures', 'bingx-futures') }}
             </div>

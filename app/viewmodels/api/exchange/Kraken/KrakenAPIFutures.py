@@ -22,6 +22,16 @@ class KrakenFuturesExchange(KrakenExchange):
             'secret': config.KRAKEN_FUTURE_API_SECRET,
         })
 
+        self.rateLimit = getattr(self.exchange, 'rateLimit', 2000)
+
+    @property
+    def rateLimit(self):
+        return self._rateLimit
+    
+    @rateLimit.setter
+    def rateLimit(self, value):
+        self._rateLimit = max(value, 1000)
+
     def get_account_balance(self):
         """Retrieve account balance."""
         try:
@@ -126,6 +136,7 @@ class KrakenFuturesExchange(KrakenExchange):
             else:
                 # Execute order
                 side = order_direction  # 'buy' or 'sell'
+                print("amount = ",volume);
                 order = self.exchange.create_order(
                     symbol=symbol,
                     type="market",

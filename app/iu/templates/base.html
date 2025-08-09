@@ -30,24 +30,6 @@
 	<body>
 		{% include 'partials/_nav.html' %}
 
-		<div class="container">
-			{% for message in get_flashed_messages() %}
-			<div class="alert alert-warning">
-				<button type="button" class="close" data-dismiss="alert">
-					&times;
-				</button>
-				{{ message }}
-			</div>
-			{% endfor %} {% if error %}
-			<div
-				class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative"
-				role="alert"
-			>
-				<span class="block sm:inline">{{ error }}</span>
-			</div>
-			{% endif %}
-		</div>
-
 		<div class="container-fluid">{% block content %}{% endblock %}</div>
 
 		<!-- Bootstrap JS -->

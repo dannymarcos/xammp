@@ -53,6 +53,16 @@ class BingxExchange(Exchange):
         self.user_id = user_id
         self.trading_mode = trading_mode
 
+        self.rateLimit = getattr(self.exchange, 'rateLimit', 2000)
+
+    @property
+    def rateLimit(self):
+        return self._rateLimit
+    
+    @rateLimit.setter
+    def rateLimit(self, value):
+        self._rateLimit = max(value, 1000)
+
     def identification(self):
         return "Bingx"
 
@@ -100,7 +110,7 @@ class BingxExchange(Exchange):
         )
 
         params = {}
-        leverage = 10
+        leverage = 1
 
         if stop_loss and stop_loss > 0:
             params["stopLossPrice"] = stop_loss

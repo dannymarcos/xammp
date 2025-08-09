@@ -1,3 +1,5 @@
+// obsoleto
+
 class ExchangeComponentManager {
     constructor(exchangeId) {
         if (!exchangeId) {
@@ -27,7 +29,7 @@ class ExchangeComponentManager {
             const data = await response.json();
             return data.price;
         } catch (error) {
-            console.error(`Failed to fetch price for ${symbol}:`, error);
+            // console.error(`Failed to fetch price for ${symbol}:`, error);
             throw error;
         }
     }
@@ -129,8 +131,8 @@ class ExchangeComponentManager {
     }
 }
 
-const futuresExchangeManager = new ExchangeComponentManager('futures');
-futuresExchangeManager.startPriceUpdater();
+// const futuresExchangeManager = new ExchangeComponentManager('futures');
+// futuresExchangeManager.startPriceUpdater();
 
 /*
 // Example Usage (typically in another JS file where you initialize your page components):
