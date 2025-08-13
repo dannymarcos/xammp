@@ -43,10 +43,12 @@ def admin_verify_transaction():
     data = request.get_json()
     id = data.get("transaction_id")
 
-    is_valid = wallet.set_verification(id, True)
     data = wallet.get_data_with_id(id)
 
-    print(data)
+    if data.verification:
+        return jsonify({"success": False, "error": "the transaction has been verified before"})
+
+    is_valid = wallet.set_verification(id, True)
 
     if data:
         wallet.add_found(data.user_id, data.amount, data.currency, "general")

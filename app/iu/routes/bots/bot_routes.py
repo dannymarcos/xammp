@@ -76,6 +76,7 @@ def start_bot_trading():
 
         # Validar balance en la wallet del usuario
         trade_amount = float(data.get('amount', 0.01))
+
         trading_pair = data.get('symbol', 'XBTUSD')
 
         # Determinar la moneda a usar (ej: USDT para BTC/USDT)        
@@ -87,6 +88,9 @@ def start_bot_trading():
         type_exchange_trading_mode: str = type_exchange+"_"+trading_mode
         type_exchange_trading_mode = type_exchange_trading_mode.lower()
         
+        if trade_amount < 0.00011:
+            raise Exception(f"Must be an amount greater than 0.00011")
+
         # Permitir tener el symbol correcto para cada caso
         if type_exchange_trading_mode == "kraken_spot":       trading_pair = "BTC/USD"
         elif type_exchange_trading_mode == "kraken_futures":  trading_pair = "BTC/USD:USD"

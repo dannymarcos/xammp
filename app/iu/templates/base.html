@@ -26,6 +26,9 @@
 			href="{{ url_for('static', filename='css/custom.css') }}"
 			rel="stylesheet"
 		/>
+
+		<script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script defer src="{{ url_for('static', filename='js/custom/alerts.js') }}"></script>
 	</head>
 	<body>
 		{% include 'partials/_nav.html' %}

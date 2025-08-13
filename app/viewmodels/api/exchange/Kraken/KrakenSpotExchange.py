@@ -59,7 +59,7 @@ class KrakenSpotExchange(KrakenExchange):
         order_made_by="user"
     ):
         try:
-            if order_made_by not in ["bot", "user"]:
+            if order_made_by not in ["basic-bot", "strategy-bot", "user"]:
                 raise ValueError("order_made_by must be 'bot' or 'user'")
 
             # Validate inputs

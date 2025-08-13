@@ -34,6 +34,8 @@ class StrategyTradingBot:
         self.wallet = Wallet(self.user_id)
         self.type_wallet = type_wallet
         self.email = email
+        self.purchased_quantity_for_user = 0.00
+        self.purchased_quantity_for_exchange = 0.00
 
     def start(self):
         self.running = True
@@ -45,6 +47,13 @@ class StrategyTradingBot:
     def stop(self):
         self.running = False
         print("Simulated trading bot stopped.")
+        logger.info("-> SLEEP 60s")
+        time.sleep(60)
+
+        if self.purchased_quantity_for_user > 0:
+            self.execute_action("sell", self.purchased_quantity_for_user)
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"All BTC purchased ({self.purchased_quantity_for_user}) has been sold."})
+
         self.generate_report()
 
     def run_loop(self):
@@ -54,12 +63,11 @@ class StrategyTradingBot:
             emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Our AI assistant is analyzing the market and preparing your next trading move"})
             decision = self.interact_with_llm(strategy)
             emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Our AI assistant suggests to '{decision.upper()}'"})
-            self.execute_action("buy")
+            self.execute_action(decision)
 
     def get_strategy(self):
         # Simulate fetching a trading strategy from a database.
         return "Simple moving average crossover strategy."
-
 
     def interact_with_llm(self, strategy):
         timeframe = self.config.timeframe
@@ -105,15 +113,18 @@ class StrategyTradingBot:
 
         return trading_action
 
-    def execute_action(self, decision):
+    def execute_action(self, decision, amount=None):
         # Based on the LLM's simulated decision:
         if(decision == "wait"):
             return
 
+        if amount == None:
+            amount = self.config.trade_amount
+
         data = {
             "orderType": "market",
             "orderDirection": decision,
-            "amount": self.config.trade_amount,
+            "amount": amount,
             "symbol": self.config.trading_pair,
             "order_made_by": "bot",
         }
@@ -128,208 +139,27 @@ class StrategyTradingBot:
             else:
                 price = price_data
 
-            data["price"] = price * self.config.trade_amount
+            data["price"] = price * amount
         if self.config.basic_bot_trading_mode_full in ["kraken_futures", "bingx_spot", "bingx_futures"]:
             data["leverage"] = 1.0
             data["stopLoss"] = None
             data["takeProfit"] = None
+        
+        data["order_made_by"] = "strategy-bot"
 
-        success = add_order(user_id=self.user_id, data=data, trading_mode=self.config.basic_bot_trading_mode_full)
+        success, amount_obtained_from_the_order_crypto = add_order(user_id=self.user_id, data=data, trading_mode=self.config.basic_bot_trading_mode_full)
         if not success:
             emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Not enough funds (main exchange) to place your buy order"})
             return
-        
-        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Buy order placed. You're all set!"})
-        
-    def execute_buy_order(self):
-        base_currency, quote_currency = self.config.trading_pair.split("/")
-        
-        # Verificar si tiene suficiente USDT para comprar BTC
-        # Necesitamos calcular cuánto USDT costará la operación
-        current_price = self.exchange.get_symbol_price(self.config.trading_pair)
-        if isinstance(current_price, tuple):
-            price_data = current_price[0]
-            if isinstance(price_data, dict) and "price" in price_data:
-                price = price_data["price"]
-            else:
-                price = price_data
-        else:
-            price = current_price
-            
-        # Ensure price is a number
-        if not isinstance(price, (int, float)) or price <= 0:
-            print(f"ERROR: Invalid price received: {price}")
-            return
-            
-        total_cost_usdt = self.config.trade_amount * price
-        
-        # Verificar si tiene suficiente USDT en la wallet general
-        if not self.wallet.has_balance_in_currency(total_cost_usdt, "USDT", "USDT", "general"):
-            print(f"ERROR: Insufficient USDT balance in your wallet. Required: {total_cost_usdt} USDT")
-            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Not enough USDT to buy. You need {total_cost_usdt:.2f} USDT."})
 
-            return
-
-        # Call add_order with correct parameters based on exchange type
-        try:
-            # Try the futures-style call first
-            order_result = self.exchange.add_order(
-                order_type="market",
-                order_direction="buy",
-                volume=self.config.trade_amount,
-                symbol=self.config.trading_pair,
-                order_made_by="bot"
-            )
-        except TypeError:
-            # If that fails, try the spot-style call
-            try:
-                order_result = self.exchange.add_order(
-                    order_direction="buy",
-                    symbol=self.config.trading_pair,
-                    volume=self.config.trade_amount,
-                    order_type="market",
-                    order_made_by="bot"
-                )
-            except TypeError:
-                # If both fail, try the most basic call
-                order_result = self.exchange.add_order(
-                    "buy",
-                    self.config.trading_pair,
-                    self.config.trade_amount
-                )
+        if decision == "buy":
+            self.purchased_quantity_for_user += amount_obtained_from_the_order_crypto
+            self.purchased_quantity_for_exchange += amount
+        elif decision == "sell":
+            self.purchased_quantity_for_user -= amount_obtained_from_the_order_crypto
+            self.purchased_quantity_for_exchange -= amount
         
-        # Handle tuple response (order_data, status_code)
-        if isinstance(order_result, tuple):
-            order, status_code = order_result
-        else:
-            order = order_result
-            status_code = 200
-
-        if 'error' in order:
-            print(f"Error executing buy order: {order['error']}")
-            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Not enough funds (main exchange) to place your buy order"})
-            return
-        
-        # Obtener el precio actual del exchange para las transacciones
-        print("Getting current price from exchange for wallet transactions...")
-        current_price = self.exchange.get_symbol_price(self.config.trading_pair)
-        if isinstance(current_price, tuple):
-            price_data = current_price[0]
-            if isinstance(price_data, dict) and "price" in price_data:
-                price = price_data["price"]
-            else:
-                price = price_data
-        else:
-            price = current_price
-        
-        # Ensure price is a number
-        if not isinstance(price, (int, float)) or price <= 0:
-            print(f"ERROR: Could not get valid price from exchange: {price}")
-            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Sorry, we couldn't get the latest price"})
-            return
-            
-        print(f"Using current market price for transactions: {price}")
-        
-        # Registrar retiro en la wallet del usuario (BTC/USD) y depósito en BTC
-        amount = self.config.trade_amount
-        
-        # Restar USDT
-        self.wallet_admin.add_found(self.user_id, -price * amount, "USDT" if quote_currency == "USD" else quote_currency, "general")
-        # Sumar BTC
-        self.wallet_admin.add_found(self.user_id, amount, base_currency, self.type_wallet)
-
-        self.trades.append({"action": "buy", "price": price})
-        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Buy order placed at {price}. You're all set!"})
-
-        print(f"📈 BUY order executed at {price}")
-
-    def execute_sell_order(self):
-        base_currency, quote_currency = self.config.trading_pair.split("/")
-
-        # Verificar si tiene suficiente BTC en la wallet específica
-        if not self.wallet.has_balance_in_currency(self.config.trade_amount, base_currency, base_currency, self.type_wallet):
-            print(f"ERROR: Insufficient {base_currency} balance in your {self.type_wallet} wallet. Required: {self.config.trade_amount}")
-            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Not enough {base_currency} in your {self.type_wallet} wallet to sell"})
-
-            return
-
-        # Call add_order with correct parameters based on exchange type
-        try:
-            # Try the futures-style call first
-            order_result = self.exchange.add_order(
-                order_type="market",
-                order_direction="sell",
-                volume=self.config.trade_amount,
-                symbol=self.config.trading_pair,
-                order_made_by="bot"
-            )
-        except TypeError:
-            # If that fails, try the spot-style call
-            try:
-                order_result = self.exchange.add_order(
-                    order_direction="sell",
-                    symbol=self.config.trading_pair,
-                    volume=self.config.trade_amount,
-                    order_type="market",
-                    order_made_by="bot"
-                )
-            except TypeError:
-                # If both fail, try the most basic call
-                order_result = self.exchange.add_order(
-                    "sell",
-                    self.config.trading_pair,
-                    self.config.trade_amount
-                )
-        
-        # Handle tuple response (order_data, status_code)
-        if isinstance(order_result, tuple):
-            order, status_code = order_result
-        else:
-            order = order_result
-            status_code = 200
-
-        if 'error' in order:
-            print(f"Error executing sell order: {order['error']}")
-            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Oops! We couldn't place your sell order"})
-
-            return
-        
-        # Obtener el precio actual del exchange para las transacciones
-        print("Getting current price from exchange for wallet transactions...")
-        current_price = self.exchange.get_symbol_price(self.config.trading_pair)
-        if isinstance(current_price, tuple):
-            price_data = current_price[0]
-            if isinstance(price_data, dict) and "price" in price_data:
-                price = price_data["price"]
-            else:
-                price = price_data
-        else:
-            price = current_price
-        
-        # Ensure price is a number
-        if not isinstance(price, (int, float)) or price <= 0:
-            print(f"ERROR: Could not get valid price from exchange: {price}")
-            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Sorry, couldn't get the price"})
-
-            return
-            
-        print(f"Using current market price for transactions: {price}")
-        
-        # Registrar depósito en la wallet del usuario (BTC/USD) y retiro en BTC
-        amount = self.config.trade_amount
-        
-        # Restar BTC
-        self.wallet_admin.add_found(self.user_id, -amount, base_currency, self.type_wallet)
-        # Sumar USDT
-        self.wallet_admin.add_found(self.user_id, price * amount, "USDT" if quote_currency == "USD" else quote_currency, "general")
-
-        self.trades.append({"action": "sell", "price": price})
-        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Sold at {price} 📉"})
-        print(f"📉 SELL order executed at {price}")
-
-    def wait(self):
-        # Reiterate the loop.
-        print("Waiting for a better opportunity.")
+        emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"{decision} order placed. You're all set!"})
 
     def generate_report(self):
         # Upon stopping, generate a final report summarizing simulated trades and outcomes with emojis.

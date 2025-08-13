@@ -7,6 +7,11 @@ export class TradingBot {
 		this.botId = botId;
 		this.container = document.getElementById(botId);
 
+		// Si el contenedor tiene data-botid, usarlo para asegurar el botId correcto
+		if (this.container && this.container.dataset && this.container.dataset.botid) {
+			this.botId = this.container.dataset.botid;
+		}
+
 		// Instance state
 		this.state = {
 			isBotRunning: false,
@@ -35,6 +40,12 @@ export class TradingBot {
 
 		// Config inputs
 		this.configInputs = this.container.querySelectorAll(`.bot-config-input`);
+		this.handleRenderTrades();
+	}
+
+	async handleRenderTrades() {
+		const trades = await this.getTrades();
+		this.renderTrades(trades);
 	}
 
 	/**
@@ -181,7 +192,7 @@ export class TradingBot {
 	 */
 	async getTrades() {
 		try {
-			const response = await fetch(`/trades?by=bot&bot_id=${this.botId}`);
+			const response = await fetch(`/trades?by=${this.botId}`);
 			const data = await response.json();
 			return data.trades || [];
 		} catch (error) {
@@ -495,15 +506,13 @@ export class TradingBot {
 		);
 
 		// Fetch and render initial trade history
-		const trades = await this.getTrades();
-		this.renderTrades(trades);
+		await this.handleRenderTrades();
 
 		// Set up refresh interval
 		setInterval(async () => {
 			if (this.state.isBotRunning) {
 				console.log("Refreshing trade history...");
-				const trades = await this.getTrades();
-				this.renderTrades(trades);
+				await this.handleRenderTrades();
 			}
 		}, this.state.refreshInterval);
 	}

@@ -44,8 +44,8 @@ class Trade(db.Model):
 
 def get_all_trades_from_user(user_id, by="all"):
     # From the most recent
-    if by == "bot":
-        trades = Trade.query.filter_by(user_id=user_id, by="bot").order_by(Trade.timestamp.desc()).all()
+    if by in ["strategy-bot", "basic-bot"]:
+        trades = Trade.query.filter_by(user_id=user_id, by=by).order_by(Trade.timestamp.desc()).all()
         return [trade.serialize for trade in trades]
     if by == "user":
         trades = Trade.query.filter_by(user_id=user_id, by="user").order_by(Trade.timestamp.desc()).all()

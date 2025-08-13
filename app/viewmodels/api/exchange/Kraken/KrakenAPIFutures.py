@@ -89,7 +89,7 @@ class KrakenFuturesExchange(KrakenExchange):
     ):
         """Place a new futures order."""
         try:
-            if order_made_by not in ["bot", "user"]:
+            if order_made_by not in ["basic-bot", "strategy-bot", "user"]:
                 raise ValueError("order_made_by must be 'bot' or 'user'")
 
             params = {}

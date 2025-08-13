@@ -226,9 +226,11 @@ def get_symbol_price():
 
 @trading_bp.route("/trades", methods=['GET'])
 @login_required
+# /trades?by=bot&bot_id=
 def get_user_trades():
     try:
         by = request.args.get("by")
+
         if not current_user.is_authenticated:
             return jsonify({"error": "User not authenticated"}), 401
         trades = get_all_trades_from_user(current_user.id, by)
@@ -330,23 +332,23 @@ def add_order():
                     price = price_data
             
             # Validate user balance
-            # if order_direction == "buy":
-            #     if not wallet.has_balance_in_currency(volume, "USDT", "USDT", "general"):
-            #         return jsonify({"error": f"Insufficient USDT balance. Required: {volume} USDT"}), 400
+            if order_direction == "buy":
+                if not wallet.has_balance_in_currency(volume, "USDT", "USDT", "general"):
+                    return jsonify({"error": f"Insufficient USDT balance. Required: {volume} USDT"}), 400
                 
                 # Validate master account balance
-                # is_valid, error_msg = validate_master_account_balance(volume, "USD", exchange_id)
-                # if not is_valid:
-                #     return jsonify({"error": error_msg}), 400
-            # else:  # sell
-            #     symbol_base = symbol.split("/")[0]
-            #     if not wallet.has_balance_in_currency(volume, symbol_base, symbol_base, exchange_id):
-            #         return jsonify({"error": f"Insufficient {symbol_base} balance. Required: {volume} {symbol_base}"}), 400
+                is_valid, error_msg = validate_master_account_balance(volume, "USD.F", exchange_id)
+                if not is_valid:
+                    return jsonify({"error": error_msg}), 400
+            else:  # sell
+                symbol_base = symbol.split("/")[0]
+                if not wallet.has_balance_in_currency(volume, symbol_base, symbol_base, exchange_id):
+                    return jsonify({"error": f"Insufficient {symbol_base} balance. Required: {volume} {symbol_base}"}), 400
                 
                 # Validate master account balance
-                # is_valid, error_msg = validate_master_account_balance(volume, symbol_base, exchange_id)
-                # if not is_valid:
-                #     return jsonify({"error": error_msg}), 400
+                is_valid, error_msg = validate_master_account_balance(volume, symbol_base + ".F", exchange_id)
+                if not is_valid:
+                    return jsonify({"error": error_msg}), 400
             
             response = exchange.add_order(
                 order_type=ordertype,

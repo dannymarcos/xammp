@@ -150,6 +150,9 @@
         // Expose global refresh function
         const globalFunctionName = `refreshExchangeBalances_${baseId}_${tradingMode}`;
         window[globalFunctionName] = fetchAndUpdateBalances;
+
+        if(window.tag_refresh_balances === undefined) window.tag_refresh_balances = [];
+        window.tag_refresh_balances.push(globalFunctionName);
         
         // Initial fetch
         fetchAndUpdateBalances();

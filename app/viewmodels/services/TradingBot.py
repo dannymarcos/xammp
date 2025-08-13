@@ -111,6 +111,9 @@ class TradingBot:
         self.email = email
         self.user_id = user_id
         self.exchange = exchange
+        self.purchased_quantity_for_user = 0.00
+        self.purchased_quantity_for_exchange = 0.00
+
         try:
             logger.info("Initializing trading bot for user %s", user_id)
             # Validate configuration
@@ -118,9 +121,6 @@ class TradingBot:
             emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "Checking your bot settings. Please wait while we validate your configuration..."})
 
             self.config = TradingConfig(**config)
-            print("@"*50)
-            print(config)
-            print("@"*50)
 
             # Si la instancia ya estaba inicializada, no re-crear los estados, solo actualizar config
             if not hasattr(self, "_initialized"):
@@ -201,6 +201,8 @@ class TradingBot:
                 self.user_id, "\n".join(self.bot_errors)
             )  # Save errors to user model
             return True
+        
+        
 
         return False
 
@@ -597,6 +599,7 @@ class TradingBot:
         take_profit_pct = getattr(self.config, "take_profit_pct", 0.04)
 
         # --- Buy/Sell Logic ---
+
         if (signals["buy"] or signals["sell"]) and len(self.active_trades) < max_active_trades:
             logger.info(f"➡️ BUY signal received. Attempting to create BUY order.")
             # Calcular stop_loss y take_profit basados en porcentajes
@@ -604,13 +607,12 @@ class TradingBot:
             take_profit_price = current_price * (1 + take_profit_pct)
 
             success, _ = self._create_order(
-                order_direction="buy" if signals["buy"] else "sell",
+                order_direction=("buy" if signals["buy"] else "sell"),
                 current_price=current_price,
                 order_type="market",
                 leverage=1.0,
                 stop_loss=stop_loss_price,
                 take_profit=take_profit_price,
-                order_made_by="bot",
                 volume=self.config.trade_amount,
                 symbol=self.config.trading_pair
             )
@@ -639,8 +641,10 @@ class TradingBot:
                                    f"{trading_pair} at {current_price:.6f} 📉"
                         }
                     )
+            
+
             else:
-                logger.warning("❌ Failed to create BUY order")
+                logger.warning(f"❌ Failed to create {"BUY" if signals["buy"] else "SELL"} order")
 
     def _check_risk_management(self):
         """
@@ -683,7 +687,6 @@ class TradingBot:
 
                     order_type = getattr(self.config, "order_type", "market")
                     leverage = float(getattr(self.config, "leverage", 1.0))
-                    order_made_by = "bot"
                     order_result = self._create_order(
                         order_direction="sell",
                         current_price=current_price,
@@ -691,7 +694,6 @@ class TradingBot:
                         leverage=leverage,
                         stop_loss=stop_loss,
                         take_profit=take_profit,
-                        order_made_by=order_made_by
                     )
                     order_data = order_result[1] if order_result else None
                     if (
@@ -775,7 +777,7 @@ class TradingBot:
                         )
                         self._add_bot_error(f"Failed TP order: {trade_id}")
 
-    def _create_order(self, order_direction: str, current_price: float = None, order_type: str = "market", leverage: float = 1.0, stop_loss: float = None, take_profit: float = None, order_made_by: str = "bot", volume: float = None, symbol: str = None):
+    def _create_order(self, order_direction: str, current_price: float = None, order_type: str = "market", leverage: float = 1.0, stop_loss: float = None, take_profit: float = None, order_made_by: str = "basic-bot", volume: float = None, symbol: str = None):
         user_id = getattr(self, "user_id", None)
         trading_mode = getattr(self.config, "basic_bot_trading_mode_full", "spot")
         symbol = getattr(self.config, "trading_pair", None)
@@ -801,7 +803,11 @@ class TradingBot:
             "amount": trade_amount,
             "leverage": leverage
         }
-                
+        
+        print("=== data ===")
+        print(data)
+        print("=== data ===")
+
         if trading_mode == "kraken_futures":
             if order_direction == "buy":
                 data["money_wanted_to_spend"] = trade_amount
@@ -820,7 +826,18 @@ class TradingBot:
         print(f"[TradingBot._create_order] user_id={user_id}")
         print(f"[TradingBot._create_order] data={data}")
         print(f"[TradingBot._create_order] trading_mode={trading_mode}")
-        success = add_order(user_id=user_id, data=data, trading_mode=trading_mode)
+        data["order_made_by"] = "basic-bot"
+
+        success, amount_obtained_from_the_order_crypto = add_order(user_id=user_id, data=data, trading_mode=trading_mode)
+
+        if success:
+            if order_direction == "buy":
+                self.purchased_quantity_for_user += amount_obtained_from_the_order_crypto
+                self.purchased_quantity_for_exchange += data["amount"]
+            elif order_direction == "sell":
+                self.purchased_quantity_for_user -= amount_obtained_from_the_order_crypto
+                self.purchased_quantity_for_exchange -= data["amount"]
+
         return success, None
 
     def _get_current_price(self) -> Optional[float]:
@@ -1080,8 +1097,34 @@ class TradingBot:
 
     def stop(self):
         """Stop the trading bot"""
-        logger.info(f"Attempting to stop bot for user {self.user_id}")
         self.running = False
+        
+        logger.info("-> SLEEP 60s")
+        time.sleep(60)
+
+        logger.info(f"Attempting to stop bot for user {self.user_id}")
+        print("ES:", self.purchased_quantity_for_user)
+
+        if self.purchased_quantity_for_user > 0:
+            current_price = self._get_current_price()
+
+            success, _ = self._create_order(
+                order_direction="sell",
+                current_price=current_price,
+                order_type="market",
+                leverage=1.0,
+                stop_loss=None,
+                take_profit=None,
+                volume=self.purchased_quantity_for_user,
+                symbol=self.config.trading_pair
+            )
+            
+            if not success:
+                emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"An error occurred when selling {self.purchased_quantity_for_user} BTC from your account. To withdraw it, you can go to the trading section and exchange it for USDT"})
+                return
+            
+            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"{self.purchased_quantity_for_user} BTC has been successfully sold, and the equivalent amount is in your general account"})
+
         if hasattr(self, "thread") and self.thread.is_alive():
             logger.info(f"Joining bot thread for user {self.user_id}...")
             self.thread.join(timeout=10)  # Give thread up to 10 seconds to finish loop
