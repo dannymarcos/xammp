@@ -88,8 +88,13 @@ def start_bot_trading():
         type_exchange_trading_mode: str = type_exchange+"_"+trading_mode
         type_exchange_trading_mode = type_exchange_trading_mode.lower()
         
-        if trade_amount < 0.00011:
-            raise Exception(f"Must be an amount greater than 0.00011")
+        if type_exchange == "kraken":
+            raise Exception(f"kraken is temporarily disabled for bots")
+
+        if trade_amount < 0.00001 and type_exchange_trading_mode in ["bingx_spot", "kraken_spot"]:
+            raise Exception(f"Must be an amount greater than 0.00001")
+        elif trade_amount < 0.0001 and type_exchange_trading_mode in ["bingx_futures", "kraken_futures"]:
+            raise Exception(f"Must be an amount greater than 0.0001")
 
         # Permitir tener el symbol correcto para cada caso
         if type_exchange_trading_mode == "kraken_spot":       trading_pair = "BTC/USD"

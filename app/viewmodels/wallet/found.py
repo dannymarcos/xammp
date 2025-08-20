@@ -1,3 +1,4 @@
+from app.models.blocked_balance import add_quantity_to_block, get_balance_blocked_total_usdt, get_blocked_quantity
 from app.viewmodels.api.exchange.Kraken.KrakenAPIFutures import KrakenFuturesExchange
 from app.viewmodels.api.exchange.Bingx.BingxExchange import BingxExchange
 from app.viewmodels.api.exchange.Kraken.KrakenSpotExchange import KrakenSpotExchange
@@ -96,7 +97,6 @@ class Wallet:
             return False
         
         return True
-
 
     def withdrawal_found_wallet(self, amount: float, currency: str, ref: str, red: str, exchange: str = "general", x: bool = False, verification: bool = False, capital_part: float = None):
         # Pasar capital_part a create_found_wallet
@@ -409,10 +409,12 @@ class Wallet:
         """
         try:
             # Si la moneda ya es USDT, hacer comparación directa
+            blocked_balance = abs(self.get_balance_blocked_usdt())
+
             if symbol_base.upper() == symbol_compare.upper():
                 balance = self.get_balance_by_currency(symbol_base, exchange_name)
 
-                return balance >= amount
+                return (balance - blocked_balance) >= amount
             
             exchange = ExchangeFactory().create_exchange(name=type_exchange, user_id=self.user_id)
             trading_pair = f"{symbol_base}/{symbol_compare}"
@@ -446,15 +448,13 @@ class Wallet:
             usdt_balance = self.get_balance_by_currency(symbol_compare, exchange_name)
             print(f"usdt_balance: {usdt_balance}")
             print(f"usdt_balance >= value_in_usdt: {usdt_balance >= value_in_usdt}")
-            print("#"*80)            
-            return usdt_balance >= value_in_usdt
+            print("#"*80) 
+            
+            return (usdt_balance - blocked_balance) >= value_in_usdt
             
         except Exception as e:
             print(f"Error checking {symbol_compare} balance: {e}")
             return False
-
-
-
 
     def get_total_deposits(self):
         """Obtiene solo la suma de los depósitos verificados (sin incluir saldos actuales)"""
@@ -528,6 +528,20 @@ class Wallet:
         
         return available_gain, amount_total_now, None
 
+    def get_balance_general_usdt(self):
+        blocked_balance = abs(self.get_balance_blocked_usdt())
+        balance = self.get_balance_by_currency("USDT", "general")
+
+        return (balance - blocked_balance)
+
+    def add_blocked_balance(self, amount_usdt: float, amount_crypto: float, currency: str, by_bot: str, exchange: str = "general"):
+        return add_quantity_to_block(self.user_id, amount_usdt, amount_crypto, currency, by_bot, exchange)
+
+    def get_blocked_balance(self, currency, by_bot: str, exchange: str = "general", finished: bool = False) -> dict:
+        return get_blocked_quantity(self.user_id, currency, by_bot, exchange, finished)
+    
+    def get_balance_blocked_usdt(self) -> float:
+        return get_balance_blocked_total_usdt(self.user_id)
 
 class WalletAdmin:
     def __init__(self):

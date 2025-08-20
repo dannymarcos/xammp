@@ -74,19 +74,21 @@ def home_wallet():
     
     last_verified = get_last_verified_deposit_or_withdrawal(id)
     disabled_withdraw, _ = withdrawal_period_active(last_verified)
+    balance_blocked = wallet.get_balance_blocked_usdt()
     print(f"last_verified: {disabled_withdraw}")
 
     if request.method == 'GET':
         return render_template("wallet.html", 
-                             name=name, 
-                             balance=balance,
-                             balance_general=balance_general,
-                             performance=performance,
-                             initial_capital=initial_capital,
-                             pending_balance=pending_balance,
-                             pending_withdrawal_balance=pending_withdrawal_balance,
-                             disabled_withdraw=disabled_withdraw,
-                             is_admin=(current_user.role == "admin"))
+                                name=name, 
+                                balance=balance,
+                                balance_general=balance_general,
+                                performance=performance,
+                                initial_capital=initial_capital,
+                                pending_balance=pending_balance,
+                                pending_withdrawal_balance=pending_withdrawal_balance,
+                                balance_blocked=balance_blocked,
+                                disabled_withdraw=disabled_withdraw,
+                                is_admin=(current_user.role == "admin"))
     return render_template("under_construction.html")
 
 @wallet_bp.route("/settings/wallet", methods=["GET", "POST"])

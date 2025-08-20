@@ -116,18 +116,15 @@
         <table class="table table-hover">
           <thead class="table-light">
             <tr>
-              <th>Date</th>
-              <th>Order Type</th>
-              <th>Direction</th>
-              <th>Symbol</th>
-              <th class="text-end">Price</th>
-              <th class="text-end">Volume</th>
-              <th>Status</th>
-              <th class="text-end">Take Profit</th>
-              <th class="text-end">Actual Profit USD</th>
-              <th>Trading mode</th>
-              <th>Exchange</th>
-              <th>Comment</th>
+              <th>{{ _('Date') }}</th>
+              <th>{{ _('Order Type') }}</th>
+              <th>{{ _('Direction') }}</th>
+              <th>{{ _('Symbol') }}</th>
+              <th class="text-end">{{ _('Coste') }}</th>
+              <th class="text-end">{{ _('Take Profit') }}</th>
+              <th class="text-end">{{ _('Actual Profit USD') }}</th>
+              <th>{{ _('Trading mode') }}</th>
+              <th>{{ _('Exchange') }}</th>
             </tr>
           </thead>
           <tbody id="strategy-trade-history-body" class="trade-history-body-strategy-bot">
@@ -165,9 +162,11 @@
       if(data.id === "strategy-bot") {
         document.getElementById("MessageForTradingCustomBot").innerText = data.msg;
         document.getElementById("ContentForTradingCustomBot").style.visibility = "visible";
-      }else {
+      }else if(data.id === "basic-bot") {
         document.getElementById("MessageForTradingBasicBot").innerText = data.msg;
         document.getElementById("ContentForTradingBasicBot").style.visibility = "visible";
+      }else if(data.id === "refresh-balance") {
+        window.tag_refresh_balances.forEach(e => window[e]());
       }
     };
 

@@ -1,411 +1,63 @@
 """
 	add_order lo usa ambos bots para poder comprar/vender con los exchange
-	
-	TODO: Hacer que trading_routes.py tambien dependa de este add_order para
-	tener una sola funcion que haga esto
+
+	IMPORTANTE: Este codigo esta creado para usarse unicamente para los BOTS
 """
 
 import logging
-from app.iu.routes.tradings.trading_routes import get_current_price, validate_master_account_balance
-from app.viewmodels.api.exchange.Exchange import ExchangeFactory
+from app.lib.utils.orders.kraken_spot import process_order as process_kraken_spot
+from app.lib.utils.orders.bingx import process_order as process_bingx
+from app.lib.utils.orders.kraken_futures import process_order as process_kraken_futures
 from app.viewmodels.wallet.found import Wallet, WalletAdmin
-import flask
 
 logger = logging.getLogger(__name__)
 
 def add_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, float]:
-	try:
-		print(f"[add_order] user_id={user_id}")
-		print(f"[add_order] trading_mode={trading_mode}")
-		print(f"[add_order] data={data}")
-		wallet = Wallet(user_id)
-		wallet_admin = WalletAdmin()
-		amount_obtained_from_the_order_crypto = 0.00
+  try:
+    print(f"[add_order] user_id={user_id}")
+    print(f"[add_order] trading_mode={trading_mode}")
+    print(f"[add_order] data={data}")
+    wallet_admin = WalletAdmin()
+    wallet = Wallet(user_id=user_id)
 
-		exchange_id = trading_mode
-		if trading_mode == "kraken_spot":
-			ordertype = data.get("orderType")
-			order_direction = data.get("orderDirection")
-			volume = float(data.get("amount"))
-			symbol = data.get("symbol", "BTC/USD")
-			price = data.get("price", 0)
-			order_made_by = data.get("order_made_by", "user")
+    isSuccess = False;
+    
+    if trading_mode == "kraken_spot":
+      isSuccess, _ = process_kraken_spot(user_id, data)
+    elif trading_mode in ["bingx_spot", "bingx_futures"]:
+      isSuccess, _ = process_bingx(user_id, data, trading_mode)
+    elif trading_mode == "kraken_futures":
+      isSuccess, _ = process_kraken_futures(user_id, data)
+    else:
+      logger.error(f"Invalid trading mode: {trading_mode}")
+      return False, 0.00
+    
+    if not isSuccess:
+      print("ERROR")
+      return False, 0.00
+    
+    user_is_usdt_amount = wallet.get_blocked_balance(
+      by_bot=data["order_made_by"],
+      currency="BTC/USDT",
+      finished=True
+    )["amount_usdt"]
 
-			if order_direction == "buy":
-				required_params = [ordertype, symbol, order_made_by, volume]
-				if not all(required_params):
-					return False, 0.00
-			elif order_direction == "sell":
-				required_params = [ordertype, order_direction, volume, symbol, order_made_by]
-				if not all(required_params):
-					return False, 0.00
-			
-			exchange = ExchangeFactory().create_exchange(name="kraken_spot", user_id=user_id)
-			
-			# Get current price if not provided
-			if price == 0:
-				price_data = exchange.get_symbol_price(symbol)
-				if isinstance(price_data, tuple):
-					price = price_data[0]
-				else:
-					price = price_data
-			
-					# Validate user balance
-			if order_direction == "buy":
-				if not wallet.has_balance_in_currency(volume, "USDT", "USDT", "general"):
-					return False, 0.00
-				
-				# Validate master account balance
-				is_valid, error_msg = validate_master_account_balance(volume, "USD.F", exchange_id)
-				if not is_valid:
-					return False, 0.00
-			else:  # sell
-				symbol_base = symbol.split("/")[0]
-				if not wallet.has_balance_in_currency(volume, symbol_base, symbol_base, exchange_id):
-					return False, 0.00
-				
-				# Validate master account balance
-				is_valid, error_msg = validate_master_account_balance(volume, symbol_base + ".F", exchange_id)
+    if data.get("orderDirection") == "sell":
+      if user_is_usdt_amount >= 0:
+        print("ganancias:", user_is_usdt_amount)
+      else:
+        print("perdidas:", user_is_usdt_amount)
 
-				if not is_valid:
-					return False, 0.00
+      wallet_admin.add_found(user_id, user_is_usdt_amount, "USDT", "general")
+    
+    print("===")
+    print(wallet.get_blocked_balance(
+      by_bot=data["order_made_by"],
+      currency="BTC/USDT")
+    )
+    print("===")
 
-			# Wrap exchange.add_order call with Flask application context if not active
-			if not flask.has_app_context():
-				from app.__init__ import create_app
-				app = create_app()
-				with app.app_context():
-					response = exchange.add_order(
-						order_type=ordertype,
-						order_direction=order_direction,
-						volume=volume,
-						symbol=symbol,
-						price=price,
-						order_made_by=order_made_by,
-					)
-			else:
-				response = exchange.add_order(
-					order_type=ordertype,
-					order_direction=order_direction,
-					volume=volume,
-					symbol=symbol,
-					price=price,
-					order_made_by=order_made_by,
-				)
-
-			if(response[0] is None and "Insufficient funds" in response[1]):
-				return False, 0.00
-				
-			order_id = response[0]["id"]
-
-			data_for_order =  exchange.get_kraken_order_details(order_id)
-
-			filled = data_for_order["filled"]
-			cost = data_for_order["cost"]
-			fee = data_for_order["fee"]
-			
-			# Handle response
-			if isinstance(response, tuple):
-				order, error = response
-				if error:
-					return False, 0.00
-			else:
-				order = response
-				error = None
-			
-			# Record transaction in wallet if order was successful
-			if error is None:
-				try:
-					symbol_base = symbol.split("/")[0]
-					symbol_base_1 = symbol.split("/")[1]
-					print("*"*30)
-					print(symbol_base)
-					print(symbol)
-					print(order_direction)
-					print("*"*30)
-					
-					if order_direction == "buy":
-						amount_obtained_from_the_order_crypto = filled - fee[symbol_base]
-
-						wallet_admin.add_found(user_id, filled - fee[symbol_base], symbol_base, exchange_id)
-						wallet_admin.add_found(user_id, -cost, "USDT", "general")
-					elif order_direction == "sell":
-						amount_obtained_from_the_order_crypto = -filled
-						wallet_admin.add_found(user_id, -filled, symbol_base, exchange_id)
-						wallet_admin.add_found(user_id, cost - fee[symbol_base_1], "USDT", "general")
-				except Exception as wallet_error:
-					return False, 0.00
-			
-			return True, amount_obtained_from_the_order_crypto
-		elif trading_mode in ["bingx_spot", "bingx_futures"]:
-			symbol_base = data["symbol"].split("/")[0]
-			if trading_mode == "bingx_spot":
-				data["symbol"] = data["symbol"].replace(":USDT", "")
-			elif trading_mode == "bingx_futures":
-				if ":USDT" not in data["symbol"]:
-					data["symbol"] = data["symbol"] + ":USDT"
-			params = {"user_id": user_id}
-
-			print(f"[add_order] params before assignment: {params}")
-			if trading_mode == "bingx_spot":
-				params["name"] = "bingx"
-				params["trading_mode"] = "spot"
-			elif trading_mode == "bingx_futures":
-				params["name"] = "bingx"
-				params["trading_mode"] = "swap"
-			print(f"[add_order] params after assignment: {params}")
-
-			exchange = ExchangeFactory().create_exchange(**params)
-			print(f"[add_order] exchange created: {exchange}")
-			current_price = get_current_price(exchange, data["symbol"])
-			print(f"[add_order] current_price: {current_price}")
-
-			if current_price is None:
-				logger.error("Failed to get current price")
-				return False, 0.00
-
-			amount = float(data["amount"])
-			leverage = float(data["leverage"])
-			price = float(current_price) * amount
-			total_cost = price * leverage
-
-			print(f"[add_order] amount={amount}, leverage={leverage}, price={price}, total_cost={total_cost}")
-
-			# Validación de saldos
-			if data["orderDirection"] == "buy":
-				if not wallet.has_balance_in_currency(total_cost, "USDT", "USDT", "general"):
-					logger.error(f"Insufficient USDT balance: {total_cost}")
-					return False, 0.00
-
-				is_valid, _ = validate_master_account_balance(price, "USDT", exchange_id)
-				if not is_valid:
-					logger.error("Master account USDT balance insufficient")
-					return False, 0.00
-			elif data["orderDirection"] == "sell":
-				required_balance = amount * leverage
-				if not wallet.has_balance_in_currency(required_balance, symbol_base, symbol_base, exchange_id):
-					logger.error(f"Insufficient {symbol_base} balance: {required_balance}")
-					return False, 0.00
-
-				if trading_mode == "bingx_spot":
-					is_valid, _ = validate_master_account_balance(required_balance, symbol_base, exchange_id)
-					if not is_valid:
-						logger.error(f"Master account {symbol_base} balance insufficient")
-						return False, 0.00
-
-			print(f"[add_order] order params: leverage={data['leverage']}, order_type={data['orderType']}, volume={data['amount']}, symbol={data['symbol']}, order_direction={data['orderDirection']}")
-			
-			if not flask.has_app_context():
-				from app.__init__ import create_app
-				app = create_app()
-				with app.app_context():
-					order_result = exchange.add_order(
-						leverage=data["leverage"],
-						order_type=data["orderType"],
-						volume=data["amount"],
-						symbol=data["symbol"],
-						stop_loss=None,
-						take_profit=None,
-						order_direction=data["orderDirection"],
-						order_made_by=data["order_made_by"]
-					)
-			else:
-				order_result = exchange.add_order(
-					leverage=data["leverage"],
-					order_type=data["orderType"],
-					volume=data["amount"],
-					symbol=data["symbol"],
-					stop_loss=None,
-					take_profit=None,
-					order_direction=data["orderDirection"],
-					order_made_by=data["order_made_by"]
-				)
-
-			print(f"[add_order] order_result: {order_result}")
-
-			if isinstance(order_result, tuple):
-				order, fees, price_cripto_in_usdt, cost_in_usdt, fees_currency, status_code = order_result
-			else:
-				return False, 0.00
-
-			if status_code != 200:
-				return False, 0.00
-
-			try:
-				currency = data["symbol"].split("/")[0]
-				amount_traded = float(data["amount"]) * leverage
-				cost_in_usdt = float(cost_in_usdt)
-				fees = float(fees)
-
-				print(f"[add_order] wallet movements: currency={currency}, amount_traded={amount_traded}, cost_in_usdt={cost_in_usdt}, fees={fees}")
-
-				if data["orderDirection"] == "buy":
-					amount_obtained_from_the_order_crypto = amount_traded - (fees / price_cripto_in_usdt)
-					wallet_admin.add_found(
-						user_id,
-						amount_traded - (fees / price_cripto_in_usdt),
-						currency,
-						exchange_id
-					)
-					wallet_admin.add_found(
-						user_id,
-						-cost_in_usdt,
-						"USDT",
-						"general"
-					)
-				elif data["orderDirection"] == "sell":
-					amount_obtained_from_the_order_crypto = -amount_traded
-					wallet_admin.add_found(
-						user_id,
-						-amount_traded,
-						currency,
-						exchange_id
-					)
-					wallet_admin.add_found(
-						user_id,
-						cost_in_usdt - fees,
-						"USDT",
-						"general"
-					)
-			except Exception as wallet_error:
-				logger.error(f"Wallet transaction error: {wallet_error}")
-				return False, 0.00
-
-			return True, amount_obtained_from_the_order_crypto
-		elif trading_mode == "kraken_futures":
-			amount = float(data["amount"])
-			leverage = float(data["leverage"])
-			price = float(data.get("price"))
-			symbol_base = data["symbol"].split("/")[0]
-			exchange_id = "kraken_futures"
-			params = {"user_id": user_id, "name": "kraken_future"}
-			exchange = ExchangeFactory().create_exchange(**params)
-
-			# Validación de saldos
-			if data["orderDirection"] == "buy":
-				if not wallet.has_balance_in_currency(price, "USDT", "USDT", "general"):
-					logger.error(f"Insufficient USDT balance: {price}")
-					return False, 0.00
-
-				# is_valid, _ = validate_master_account_balance(price, "USDT", exchange_id)
-				# if not is_valid:
-				#     logger.error("Master account USD balance insufficient")
-				#     return False, 0.00
-				
-			elif data["orderDirection"] == "sell":
-				required_balance = amount * leverage
-				if not wallet.has_balance_in_currency(required_balance, symbol_base, symbol_base, exchange_id):
-					logger.error(f"Insufficient {symbol_base} balance: {required_balance}")
-					return False, 0.00
-			
-			if "kraken" in trading_mode:
-				if not flask.has_app_context():
-					from app.__init__ import create_app
-					app = create_app()
-					with app.app_context():
-						order_result = exchange.add_order(
-							leverage=data["leverage"],
-							order_type=data["orderType"],
-							volume=data["amount"],
-							symbol=data["symbol"],
-							order_made_by=data["order_made_by"],
-							order_direction=data["orderDirection"],
-						)
-				else:
-					order_result = exchange.add_order(
-						leverage=data["leverage"],
-						order_type=data["orderType"],
-						volume=data["amount"],
-						symbol=data["symbol"],
-						order_made_by=data["order_made_by"],
-						order_direction=data["orderDirection"],
-					)
-			else:
-				if not flask.has_app_context():
-					from app.__init__ import create_app
-					app = create_app()
-					with app.app_context():
-						order_result = exchange.add_order(
-							leverage=data["leverage"],
-							order_type=data["orderType"],
-							volume=data["amount"],
-							symbol=data["symbol"],
-							order_made_by=data["order_made_by"],
-							stop_loss=data["stopLoss"],
-							take_profit=data["takeProfit"],
-							order_direction=data["orderDirection"],
-						)
-				else:
-					order_result = exchange.add_order(
-						leverage=data["leverage"],
-						order_type=data["orderType"],
-						volume=data["amount"],
-						symbol=data["symbol"],
-						order_made_by=data["order_made_by"],
-						stop_loss=data["stopLoss"],
-						take_profit=data["takeProfit"],
-						order_direction=data["orderDirection"],
-					)
-			
-			if isinstance(order_result, tuple):
-				order, fees, price_cripto_in_usdt, error = order_result
-				status_code = 200 if error is None else 400
-			else:
-				order = order_result
-				error = None
-				status_code = 200
-				
-			if error is not None or status_code != 200:
-				return False, 0.00
-
-			try:
-				total_usdt = amount * float(price_cripto_in_usdt)
-				fees = float(fees)
-
-				if data["orderDirection"] == "buy":
-					margin_used = amount * leverage
-					amount_obtained_from_the_order_crypto = margin_used - fees
-
-					wallet_admin.add_found(
-						user_id,
-						margin_used - fees,
-						symbol_base,
-						exchange_id
-					)
-					wallet_admin.add_found(
-						user_id,
-						-total_usdt,
-						"USDT",
-						"general"
-					)
-				elif data["orderDirection"] == "sell":
-					fees_in_usdt = fees * float(price_cripto_in_usdt)
-					net_usdt_received = total_usdt - fees_in_usdt
-
-					amount_obtained_from_the_order_crypto = -amount
-
-					wallet_admin.add_found(
-						user_id,
-						net_usdt_received,
-						"USDT",
-						"general"
-					)
-					wallet_admin.add_found(
-						user_id,
-						-amount,
-						symbol_base,
-						exchange_id
-					)
-			except Exception as wallet_error:
-				logger.error(f"Wallet transaction error: {wallet_error}")
-				return False, 0.00
-				
-			return True, amount_obtained_from_the_order_crypto
-
-		else:
-			logger.error(f"Invalid trading mode: {trading_mode}")
-			return False, 0.00
-			
-	except Exception as e:
-		logger.error(f"Unhandled error in add_order: {str(e)}")
-		return False, 0.00
+    return True, user_is_usdt_amount
+  except Exception as e:
+    logger.error(f"Unhandled error in add_order: {str(e)}")
+    return False, 0.00

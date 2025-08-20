@@ -13,7 +13,6 @@ import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
 
-from app.lib.utils.add_order import add_order
 from app.lib.utils.tx import emit
 from app.models.trades import (
     get_open_trades_from_user,
@@ -33,6 +32,7 @@ from app.lib.utils.trading_strategies import (
     strategy_manual_engulfing_threshold,
     strategy_q_learning,
 )
+from app.viewmodels.wallet.found import Wallet
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +111,7 @@ class TradingBot:
         self.email = email
         self.user_id = user_id
         self.exchange = exchange
-        self.purchased_quantity_for_user = 0.00
-        self.purchased_quantity_for_exchange = 0.00
+        self.wallet = Wallet(self.user_id)
 
         try:
             logger.info("Initializing trading bot for user %s", user_id)
@@ -347,6 +346,7 @@ class TradingBot:
                 # 3. Execute trades based on aggregated signals
                 # Pass the Q-state to execute strategy so it can be stored with the trade
                 self._execute_strategy(aggregated_signals, q_state)
+                # emit(email=self.email, event="bot", data={"id": "refresh-balance"})
 
                 # 4. Manage risk (check stop loss/take profit for active trades)
                 self._check_risk_management()
@@ -599,13 +599,24 @@ class TradingBot:
         take_profit_pct = getattr(self.config, "take_profit_pct", 0.04)
 
         # --- Buy/Sell Logic ---
+        signals["buy"] = True
+        signals["sell"] = False
 
         if (signals["buy"] or signals["sell"]) and len(self.active_trades) < max_active_trades:
-            logger.info(f"➡️ BUY signal received. Attempting to create BUY order.")
+            logger.info(f"➡️ {"BUY" if signals["buy"] else "SELL"} signal received. Attempting to create order.")
             # Calcular stop_loss y take_profit basados en porcentajes
             stop_loss_price = current_price * (1 - stop_loss_pct)
             take_profit_price = current_price * (1 + take_profit_pct)
 
+            volume = self.config.trade_amount
+            
+            if signals["sell"]:
+                volume = self.wallet.get_blocked_balance(currency="BTC/USDT", by_bot="basic-bot")["amount_crypto"]
+                if volume <= 0.00:
+                    emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"No funds purchased for sale"})
+                    return
+
+            print(volume)
             success, _ = self._create_order(
                 order_direction=("buy" if signals["buy"] else "sell"),
                 current_price=current_price,
@@ -613,9 +624,10 @@ class TradingBot:
                 leverage=1.0,
                 stop_loss=stop_loss_price,
                 take_profit=take_profit_price,
-                volume=self.config.trade_amount,
+                volume=volume,
                 symbol=self.config.trading_pair
             )
+
             if success:
                 trade_amount = getattr(self.config, "trade_amount", 0)
                 trading_pair = getattr(self.config, "trading_pair", "Unknown")
@@ -641,8 +653,8 @@ class TradingBot:
                                    f"{trading_pair} at {current_price:.6f} 📉"
                         }
                     )
-            
-
+                
+                emit(email=self.email, event="bot", data={"id": "refresh-balance"})
             else:
                 logger.warning(f"❌ Failed to create {"BUY" if signals["buy"] else "SELL"} order")
 
@@ -799,25 +811,25 @@ class TradingBot:
             "order_made_by": order_made_by,
             "orderType": order_type,
             "volume": volume,
+            "amount": volume,
             "symbol": symbol,
-            "amount": trade_amount,
             "leverage": leverage
         }
         
         print("=== data ===")
         print(data)
         print("=== data ===")
-
+        
         if trading_mode == "kraken_futures":
             if order_direction == "buy":
-                data["money_wanted_to_spend"] = trade_amount
+                data["money_wanted_to_spend"] = volume
             else:
-                data["volume"] = trade_amount
+                data["volume"] = volume
                 
-            data["price"] = current_price * trade_amount
+            data["price"] = current_price * volume
                 
         else:  # Futures o BingX
-            data["amount"] = trade_amount
+            data["amount"] = volume
             data["leverage"] = leverage
             data["stopLoss"] = stop_loss if stop_loss is not None else 0
             data["takeProfit"] = take_profit if take_profit is not None else 0
@@ -828,15 +840,8 @@ class TradingBot:
         print(f"[TradingBot._create_order] trading_mode={trading_mode}")
         data["order_made_by"] = "basic-bot"
 
+        from app.lib.utils.add_order import add_order
         success, amount_obtained_from_the_order_crypto = add_order(user_id=user_id, data=data, trading_mode=trading_mode)
-
-        if success:
-            if order_direction == "buy":
-                self.purchased_quantity_for_user += amount_obtained_from_the_order_crypto
-                self.purchased_quantity_for_exchange += data["amount"]
-            elif order_direction == "sell":
-                self.purchased_quantity_for_user -= amount_obtained_from_the_order_crypto
-                self.purchased_quantity_for_exchange -= data["amount"]
 
         return success, None
 
@@ -1103,9 +1108,9 @@ class TradingBot:
         time.sleep(60)
 
         logger.info(f"Attempting to stop bot for user {self.user_id}")
-        print("ES:", self.purchased_quantity_for_user)
 
-        if self.purchased_quantity_for_user > 0:
+        user_cryptos = self.wallet.get_blocked_balance(currency="BTC/USDT", by_bot="basic-bot")["amount_crypto"]
+        if user_cryptos > 0:
             current_price = self._get_current_price()
 
             success, _ = self._create_order(
@@ -1115,15 +1120,15 @@ class TradingBot:
                 leverage=1.0,
                 stop_loss=None,
                 take_profit=None,
-                volume=self.purchased_quantity_for_user,
+                volume=user_cryptos,
                 symbol=self.config.trading_pair
             )
             
             if not success:
-                emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"An error occurred when selling {self.purchased_quantity_for_user} BTC from your account. To withdraw it, you can go to the trading section and exchange it for USDT"})
+                emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"An error occurred when selling {user_cryptos} BTC from your account. To withdraw it, you can go to the trading section and exchange it for USDT"})
                 return
             
-            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"{self.purchased_quantity_for_user} BTC has been successfully sold, and the equivalent amount is in your general account"})
+            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"{user_cryptos} BTC has been successfully sold, and the equivalent amount is in your general account"})
 
         if hasattr(self, "thread") and self.thread.is_alive():
             logger.info(f"Joining bot thread for user {self.user_id}...")

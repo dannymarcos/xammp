@@ -406,6 +406,17 @@ export class TradingBot {
 			const actual_profit = trade.actual_profit || 0;
 			const actual_profit_usd = trade.actual_profit_in_usd || 0;
 
+			// <th>{{ _('Date') }}</th>
+			// <th>{{ _('Order Type') }}</th>
+			// <th>{{ _('Direction') }}</th>
+			// <th>{{ _('Symbol') }}</th>
+			// <th class="text-end">{{ _('Coste') }}</th>
+			// <th class="text-end">{{ _('Take Profit') }}</th>
+			// <th class="text-end">{{ _('Actual Profit USD') }}</th>
+			// <th>{{ _('Trading mode') }}</th>
+			// <th>{{ _('Exchange') }}</th>
+
+
 			// Add badge for newest trade
 			const newestBadge =
 				isNewest && hasNewTrade
@@ -414,35 +425,17 @@ export class TradingBot {
 					  )}</span>`
 					: "";
 			row.innerHTML = `
-				<td>${trade.order_type || "N/A"} ${newestBadge}</td>
 				<td>${formattedDate}</td>
-				<td class="${directionClass}">${
-				trade.order_direction?.toUpperCase() || ""
-			}</td>
-				<td>${trade.symbol || ""}</td>
+				<td>${trade.order_type || "N/A"} ${newestBadge}</td>
+				<td class="${directionClass}">${trade.order_direction?.toUpperCase() || ""}</td>
+				<td>USDT</td>
 				<td class="text-end">${
-									trade.price ? parseFloat(trade.price).toFixed(2) : "0.00"
-								}</td>
-				<td class="text-end">${
-									trade.volume ? parseFloat(trade.volume).toFixed(8) : "0.00000000"
-								}</td>
-				<td class="text-end ${
-									trade.status === "closed" ? "text-gray" : "text-success"
-								}">${trade.status || ""}</td>
-				<td class="text-end ${
-									actual_profit > 0 ? "text-success" : "text-danger"
-								}">${actual_profit || 0}</td>
-				<td class="text-end ${
-									actual_profit_usd > 0 ? "text-success" : "text-danger"
-								}">${actual_profit_usd || 0}$</td>
+					trade.price ? parseFloat(trade.price*trade.volume).toFixed(4) : "0.00"
+				}</td>
+				<td class="text-end ${actual_profit > 0 ? "text-success" : "text-danger"}">${actual_profit || 0}</td>
+				<td class="text-end ${actual_profit_usd > 0 ? "text-success" : "text-danger"}">${actual_profit_usd || 0}$</td>
 				<td>${trade.trading_mode}</td>
 				<td>${trade.exchange}</td>
-				<td title="${trade.comment || ""}">${
-				trade.comment
-					? trade.comment.substring(0, 15) +
-					  (trade.comment.length > 15 ? "..." : "")
-					: ""
-			}</td>
 			`;
 
 			fragment.appendChild(row);

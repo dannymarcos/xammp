@@ -327,26 +327,29 @@ def add_order():
                 print("=== symbol ===")
                 price_data = exchange.get_symbol_price(symbol)
                 if isinstance(price_data, tuple):
-                    price = price_data[0]
+                    if isinstance(price_data[0], dict):
+                        price = price_data[0]["price"]
+                    else:
+                        price = price_data[0]
                 else:
                     price = price_data
-            
+
             # Validate user balance
             if order_direction == "buy":
-                if not wallet.has_balance_in_currency(volume, "USDT", "USDT", "general"):
-                    return jsonify({"error": f"Insufficient USDT balance. Required: {volume} USDT"}), 400
+                if not wallet.has_balance_in_currency(volume * price , "USDT", "USDT", "general"):
+                    return jsonify({"error": f"Insufficient USDT balance. Required: {volume * price} USDT"}), 400
                 
                 # Validate master account balance
-                is_valid, error_msg = validate_master_account_balance(volume, "USD.F", exchange_id)
+                is_valid, error_msg = validate_master_account_balance(volume * price, "USD.F", exchange_id)
                 if not is_valid:
                     return jsonify({"error": error_msg}), 400
             else:  # sell
                 symbol_base = symbol.split("/")[0]
-                if not wallet.has_balance_in_currency(volume, symbol_base, symbol_base, exchange_id):
-                    return jsonify({"error": f"Insufficient {symbol_base} balance. Required: {volume} {symbol_base}"}), 400
+                if not wallet.has_balance_in_currency(volume * price, symbol_base, symbol_base, exchange_id):
+                    return jsonify({"error": f"Insufficient {symbol_base} balance. Required: {volume * price} {symbol_base}"}), 400
                 
                 # Validate master account balance
-                is_valid, error_msg = validate_master_account_balance(volume, symbol_base + ".F", exchange_id)
+                is_valid, error_msg = validate_master_account_balance(volume * price, symbol_base + ".F", exchange_id)
                 if not is_valid:
                     return jsonify({"error": error_msg}), 400
             
@@ -358,6 +361,9 @@ def add_order():
                 price=price,
                 order_made_by=order_made_by,
             )
+            
+            if(response[1] == 'Order creation failed: kraken {"error":["EGeneral:Invalid arguments:volume minimum not met"]}'):
+                return jsonify({"error": "Volume minimum not met"}), 400
 
             if(response[0] is None and "Insufficient funds" in response[1]):
                 return jsonify({"error": "The master account does not have sufficient funds"}), 400
@@ -427,11 +433,15 @@ def add_order():
             leverage = float(data["leverage"])
 
             # Validate master account balance first
+            print("*"*30)
+            print(data["orderDirection"])
+            print("*"*30)
             if data["orderDirection"] == "buy":
                 # Then check user's local balance
-                if not wallet.has_balance_in_currency(price * leverage, "USDT", "USDT", "general"):
-                    return jsonify({"error": f"Insufficient USDT balance, now price is {price} and amount is {leverage} and total is {price * leverage}"}), 400
-
+                success = wallet.has_balance_in_currency(price * leverage, "USDT", "USDT", "general")
+                if not success:
+                    balance = wallet.get_balance_general_usdt()
+                    return jsonify({"error": f"Insufficient USDT balance, costs {price * leverage} and you have {balance}"}), 400
                 # For buy orders, check if master account has enough USDT
                 is_valid, error_msg = validate_master_account_balance(price, "USDT", exchange_id)
                 if not is_valid:
@@ -451,6 +461,7 @@ def add_order():
             print("#"*30)
             print(data["symbol"])
             print("#"*30)
+            return jsonify({"error": "test"}), 400
 
             order, fees, price_cripto_in_usdt, cost_in_usdt, fees_currency, status_code = exchange.add_order(
                 leverage=data["leverage"],

@@ -3,7 +3,6 @@ import random
 import threading
 import random
 import time
-from app.lib.utils.add_order import add_order
 from app.lib.utils.tx import emit
 from app.viewmodels.services.TradingBot import TradingConfig
 from app.models.strategies import get_strategy_by_id
@@ -34,8 +33,6 @@ class StrategyTradingBot:
         self.wallet = Wallet(self.user_id)
         self.type_wallet = type_wallet
         self.email = email
-        self.purchased_quantity_for_user = 0.00
-        self.purchased_quantity_for_exchange = 0.00
 
     def start(self):
         self.running = True
@@ -50,9 +47,11 @@ class StrategyTradingBot:
         logger.info("-> SLEEP 60s")
         time.sleep(60)
 
-        if self.purchased_quantity_for_user > 0:
-            self.execute_action("sell", self.purchased_quantity_for_user)
-            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"All BTC purchased ({self.purchased_quantity_for_user}) has been sold."})
+        user_cryptos = self.wallet.get_blocked_balance(currency="BTC/USDT", by_bot="strategy-bot")["amount_crypto"]
+        if user_cryptos > 0:
+            self.execute_action("sell")
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"All BTC purchased ({user_cryptos}) has been sold."})
+            emit(email=self.email, event="bot", data={"id": "refresh-balance"})
 
         self.generate_report()
 
@@ -64,6 +63,7 @@ class StrategyTradingBot:
             decision = self.interact_with_llm(strategy)
             emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Our AI assistant suggests to '{decision.upper()}'"})
             self.execute_action(decision)
+            emit(email=self.email, event="bot", data={"id": "refresh-balance"})
 
     def get_strategy(self):
         # Simulate fetching a trading strategy from a database.
@@ -113,13 +113,16 @@ class StrategyTradingBot:
 
         return trading_action
 
-    def execute_action(self, decision, amount=None):
+    def execute_action(self, decision):
         # Based on the LLM's simulated decision:
         if(decision == "wait"):
             return
 
-        if amount == None:
-            amount = self.config.trade_amount
+        amount = self.config.trade_amount
+        
+        if decision == "sell":
+            user_cryptos = self.wallet.get_blocked_balance(currency="BTC/USDT", by_bot="strategy-bot")["amount_crypto"]
+            amount = user_cryptos
 
         data = {
             "orderType": "market",
@@ -147,17 +150,16 @@ class StrategyTradingBot:
         
         data["order_made_by"] = "strategy-bot"
 
+        from app.lib.utils.add_order import add_order
+        user_cryptos = self.wallet.get_blocked_balance(currency="BTC/USDT", by_bot="strategy-bot")["amount_crypto"]
+        if decision == "sell" and user_cryptos <= 0:
+            emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "No crypto has been purchased previously, therefore it cannot be sold"})
+            return
+        
         success, amount_obtained_from_the_order_crypto = add_order(user_id=self.user_id, data=data, trading_mode=self.config.basic_bot_trading_mode_full)
         if not success:
             emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": "Not enough funds (main exchange) to place your buy order"})
             return
-
-        if decision == "buy":
-            self.purchased_quantity_for_user += amount_obtained_from_the_order_crypto
-            self.purchased_quantity_for_exchange += amount
-        elif decision == "sell":
-            self.purchased_quantity_for_user -= amount_obtained_from_the_order_crypto
-            self.purchased_quantity_for_exchange -= amount
         
         emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"{decision} order placed. You're all set!"})
 

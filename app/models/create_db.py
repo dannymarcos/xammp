@@ -12,3 +12,4 @@ from .transaction_wallet import FoundWallet
 from .wallet import WalletBD
 from .performance_aegis import PerformanceAegis
 from .referral_earnings import ReferralEarnings
+from .blocked_balance import BlockedBalanceDB
