@@ -111,7 +111,6 @@
                             <th>{{ _('Direction') }}</th>
                             <th>{{ _('Symbol') }}</th>
                             <th class="text-end">{{ _('Coste') }}</th>
-                            <th class="text-end">{{ _('Take Profit') }}</th>
                             <th class="text-end">{{ _('Actual Profit USD') }}</th>
                             <th>{{ _('Trading mode') }}</th>
                             <th>{{ _('Exchange') }}</th>
@@ -133,6 +132,8 @@
 <script type="module">
     import { TradingBot } from "{{ url_for('static', filename='js/TradingBot.js') }}";
     document.addEventListener("DOMContentLoaded", () => {
-        new TradingBot('basic-bot').init();
+        const bot = new TradingBot('basic-bot');
+        bot.init();
+        window["content-basic-bot"] = bot;
     });
 </script>

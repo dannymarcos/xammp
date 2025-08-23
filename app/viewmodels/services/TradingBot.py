@@ -599,8 +599,6 @@ class TradingBot:
         take_profit_pct = getattr(self.config, "take_profit_pct", 0.04)
 
         # --- Buy/Sell Logic ---
-        signals["buy"] = True
-        signals["sell"] = False
 
         if (signals["buy"] or signals["sell"]) and len(self.active_trades) < max_active_trades:
             logger.info(f"➡️ {"BUY" if signals["buy"] else "SELL"} signal received. Attempting to create order.")
@@ -653,7 +651,8 @@ class TradingBot:
                                    f"{trading_pair} at {current_price:.6f} 📉"
                         }
                     )
-                
+
+                emit(email=self.email, event="bot", data={"id": "refresh-history-basic-bot"})
                 emit(email=self.email, event="bot", data={"id": "refresh-balance"})
             else:
                 logger.warning(f"❌ Failed to create {"BUY" if signals["buy"] else "SELL"} order")
@@ -1129,7 +1128,8 @@ class TradingBot:
                 return
             
             emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"{user_cryptos} BTC has been successfully sold, and the equivalent amount is in your general account"})
-
+            emit(email=self.email, event="bot", data={"id": "refresh-history-basic-bot"})
+            emit(email=self.email, event="bot", data={"id": "refresh-balance"})
         if hasattr(self, "thread") and self.thread.is_alive():
             logger.info(f"Joining bot thread for user {self.user_id}...")
             self.thread.join(timeout=10)  # Give thread up to 10 seconds to finish loop

@@ -9,6 +9,7 @@ import sqlalchemy  # Import Babel and _ function for translations
 from app.lib.utils.tx import subscribe
 from app.models.create_db import db
 from app.models.users import User  # Import the User model
+from flask_migrate import Migrate
 import os
 
 class Application:
@@ -24,6 +25,8 @@ class Application:
         
         db.init_app(self.app) #Inicializamos db dentro del constructor
         CORS(self.app)
+        migrate = Migrate(self.app, db)
+
         
         # Initialize Babel for translations
         self.babel = Babel(self.app)

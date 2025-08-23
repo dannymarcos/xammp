@@ -45,7 +45,7 @@ export class TradingBot {
 
 	async handleRenderTrades() {
 		const trades = await this.getTrades();
-		this.renderTrades(trades);
+		this.renderTrades(trades)
 	}
 
 	/**
@@ -333,8 +333,8 @@ export class TradingBot {
 		// Get the newest trade timestamp
 		const newestTrade = sortedTrades[0];
 		const newestTimestamp =
-			newestTrade && newestTrade.timestamp
-				? new Date(newestTrade.timestamp).getTime()
+			newestTrade && newestTrade.created_at
+				? new Date(newestTrade.created_at).getTime()
 				: 0;
 
 		// Check if we have a new trade
@@ -362,8 +362,8 @@ export class TradingBot {
 			const tradeTimestamp = trade.timestamp
 				? new Date(trade.timestamp).getTime()
 				: 0;
-			const formattedDate = trade.timestamp
-				? new Date(trade.timestamp).toLocaleString()
+			const formattedDate = trade.created_at
+				? new Date(trade.created_at).toLocaleString()
 				: "N/A";
 
 			// Format price as currency
@@ -406,17 +406,6 @@ export class TradingBot {
 			const actual_profit = trade.actual_profit || 0;
 			const actual_profit_usd = trade.actual_profit_in_usd || 0;
 
-			// <th>{{ _('Date') }}</th>
-			// <th>{{ _('Order Type') }}</th>
-			// <th>{{ _('Direction') }}</th>
-			// <th>{{ _('Symbol') }}</th>
-			// <th class="text-end">{{ _('Coste') }}</th>
-			// <th class="text-end">{{ _('Take Profit') }}</th>
-			// <th class="text-end">{{ _('Actual Profit USD') }}</th>
-			// <th>{{ _('Trading mode') }}</th>
-			// <th>{{ _('Exchange') }}</th>
-
-
 			// Add badge for newest trade
 			const newestBadge =
 				isNewest && hasNewTrade
@@ -424,6 +413,7 @@ export class TradingBot {
 							"New"
 					  )}</span>`
 					: "";
+
 			row.innerHTML = `
 				<td>${formattedDate}</td>
 				<td>${trade.order_type || "N/A"} ${newestBadge}</td>
@@ -432,8 +422,7 @@ export class TradingBot {
 				<td class="text-end">${
 					trade.price ? parseFloat(trade.price*trade.volume).toFixed(4) : "0.00"
 				}</td>
-				<td class="text-end ${actual_profit > 0 ? "text-success" : "text-danger"}">${actual_profit || 0}</td>
-				<td class="text-end ${actual_profit_usd > 0 ? "text-success" : "text-danger"}">${actual_profit_usd || 0}$</td>
+				<td class="text-end ${trade.order_direction=="buy"?"text-primary":(actual_profit_usd > 0 ? "text-success" : "text-danger")}">${trade.order_direction=="buy"?"--":(actual_profit_usd+"$")}</td>
 				<td>${trade.trading_mode}</td>
 				<td>${trade.exchange}</td>
 			`;
@@ -497,16 +486,5 @@ export class TradingBot {
 		this.uiElements.toggleButton.addEventListener("click", () =>
 			this.toggleBot()
 		);
-
-		// Fetch and render initial trade history
-		await this.handleRenderTrades();
-
-		// Set up refresh interval
-		setInterval(async () => {
-			if (this.state.isBotRunning) {
-				console.log("Refreshing trade history...");
-				await this.handleRenderTrades();
-			}
-		}, this.state.refreshInterval);
 	}
 }

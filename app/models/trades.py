@@ -45,13 +45,13 @@ class Trade(db.Model):
 def get_all_trades_from_user(user_id, by="all"):
     # From the most recent
     if by in ["strategy-bot", "basic-bot"]:
-        trades = Trade.query.filter_by(user_id=user_id, by=by).order_by(Trade.timestamp.desc()).all()
+        trades = Trade.query.filter_by(user_id=user_id, by=by).order_by(Trade.created_at.desc()).all()
         return [trade.serialize for trade in trades]
     if by == "user":
-        trades = Trade.query.filter_by(user_id=user_id, by="user").order_by(Trade.timestamp.desc()).all()
+        trades = Trade.query.filter_by(user_id=user_id, by="user").order_by(Trade.created_at.desc()).all()
         return [trade.serialize for trade in trades]
     
-    trades = Trade.query.filter_by(user_id=user_id).order_by(Trade.timestamp.desc()).all()
+    trades = Trade.query.filter_by(user_id=user_id).order_by(Trade.created_at.desc()).all()
     return [trade.serialize for trade in trades]
 
 def get_open_trades_from_user(user_id, by="all"):
@@ -117,16 +117,31 @@ def update_trade_status(trade_id: str, new_status: str, app_context=None) -> boo
                 return False
     return False
 
-def set_trade_actual_profit_in_usd(trade_id: str, profit_in_usd: Optional[float], app_context=None) -> bool:
+def set_trade_actual_profit_in_usd(trade_id: str, profit_in_usd: Optional[float], user_id: Optional[str] = None, by: Optional[str] = None) -> bool:
     """
     Sets the actual_profit_in_usd for a specific trade.
     """
     from main import app_instance
-    app = app_context if app_context else app_instance
+    app = app_instance
 
     if app and hasattr(app, 'app_context'):
         with app.app_context():
             try:
+                if trade_id == "last":
+                    if user_id is None:
+                        raise ValueError("user_id must be provided when trade_id is 'last'")
+                    
+                    last_sell_trade = Trade.query.filter_by(
+                        user_id=user_id, 
+                        order_direction='sell',
+                        by=by
+                    ).order_by(Trade.created_at.desc()).first()
+                    
+                    if not last_sell_trade:
+                        return False
+                    
+                    trade_id = last_sell_trade.id
+                
                 trade = Trade.query.get(trade_id)
                 if trade:
                     trade.actual_profit_in_usd = profit_in_usd
@@ -135,7 +150,36 @@ def set_trade_actual_profit_in_usd(trade_id: str, profit_in_usd: Optional[float]
                 return False
             except Exception as e:
                 db.session.rollback()
-                # Consider logging the error
-                print(f"Error setting actual_profit_in_usd for trade {trade_id}: {e}") # Or use proper logging
+                print(f"Error setting actual_profit_in_usd for trade {trade_id}: {e}")
                 return False
     return False
+
+def get_buy_trades_between_sells(user_id, by="all"):
+    sell_filters = {
+        "user_id": user_id,
+        "order_direction": "sell",
+        "by": by
+    }
+    
+    recent_sells = Trade.query.filter_by(**sell_filters)\
+                             .order_by(Trade.created_at.desc())\
+                             .limit(2)\
+                             .all()
+    if len(recent_sells) < 2:
+        return []
+    
+    latest_sell, previous_sell = recent_sells[0], recent_sells[1]
+    
+    buy_filters = {
+        "user_id": user_id,
+        "order_direction": "buy",
+        "by": by
+    }
+    
+    buy_trades = Trade.query.filter_by(**buy_filters)\
+                           .filter(Trade.created_at > previous_sell.created_at,
+                                   Trade.created_at < latest_sell.created_at)\
+                           .order_by(Trade.created_at.desc())\
+                           .all()
+    
+    return [trade.serialize for trade in buy_trades]

@@ -11,5 +11,6 @@ from .strategies import Strategy
 from .transaction_wallet import FoundWallet
 from .wallet import WalletBD
 from .performance_aegis import PerformanceAegis
+from .user_performance import PerformanceUser
 from .referral_earnings import ReferralEarnings
 from .blocked_balance import BlockedBalanceDB

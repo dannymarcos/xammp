@@ -1,5 +1,6 @@
 import logging
 import flask
+from app.models.trades import get_buy_trades_between_sells, set_trade_actual_profit_in_usd
 from app.viewmodels.api.exchange.Exchange import ExchangeFactory
 from app.iu.routes.tradings.trading_routes import get_current_price, validate_master_account_balance
 from app.viewmodels.wallet.found import Wallet
@@ -105,25 +106,27 @@ def process_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, fl
 		cost_in_usdt = float(cost_in_usdt)
 		fees = float(fees)
 		if data.get('orderDirection') == 'buy':
-			# amount_obtained = amount_traded - (fees / float(price_cripto_in_usdt))
 			wallet.add_blocked_balance(
 				amount_usdt=-(cost_in_usdt - fees),
 				amount_crypto=amount_traded,
 				currency="BTC/USDT",
 				by_bot=data["order_made_by"]
 			)
-			# handle_user_balance[user_id]['usd'] += -(cost_in_usdt - fees)
-			# handle_user_balance[user_id]['cripto'] += amount_traded
 		elif data.get('orderDirection') == 'sell':
-			# amount_obtained = -amount_traded
 			wallet.add_blocked_balance(
 				amount_usdt=(cost_in_usdt - fees),
 				amount_crypto=-amount_traded,
 				currency="BTC/USDT",
 				by_bot=data["order_made_by"]
 			)
-			# handle_user_balance[user_id]['usd'] += (cost_in_usdt - fees)
-			# handle_user_balance[user_id]['cripto'] += -amount_traded
+   
+			trades = get_buy_trades_between_sells(user_id=user_id, by=data.get('order_made_by'))
+			for trade in trades:
+				purchase_price = trade.get("price") * trade.get("volume")
+				selling_price = trade.get("volume") * price_cripto_in_usdt
+				profit = selling_price - purchase_price
+				set_trade_actual_profit_in_usd(trade_id=trade.get("id"), profit_in_usd=profit)
+
 		else:
 			return False, 0.00
 	except Exception as e:

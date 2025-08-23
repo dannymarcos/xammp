@@ -63,7 +63,6 @@ class StrategyTradingBot:
             decision = self.interact_with_llm(strategy)
             emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"Our AI assistant suggests to '{decision.upper()}'"})
             self.execute_action(decision)
-            emit(email=self.email, event="bot", data={"id": "refresh-balance"})
 
     def get_strategy(self):
         # Simulate fetching a trading strategy from a database.
@@ -162,6 +161,9 @@ class StrategyTradingBot:
             return
         
         emit(email=self.email, event="bot", data={"id": "strategy-bot", "msg": f"{decision} order placed. You're all set!"})
+        emit(email=self.email, event="bot", data={"id": "refresh-history-strategy-bot"})
+        emit(email=self.email, event="bot", data={"id": "refresh-balance"})
+
 
     def generate_report(self):
         # Upon stopping, generate a final report summarizing simulated trades and outcomes with emojis.

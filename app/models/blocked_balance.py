@@ -1,5 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+
+from app.models.user_performance import update_user_performance
 from .create_db import db
 
 class BlockedBalanceDB(db.Model):
@@ -58,6 +60,7 @@ def add_quantity_to_block(
                     existing_blocked.amount_crypto += amount_crypto
                     
                     if existing_blocked.amount_crypto <= 0:
+                        update_user_performance(user_id,  existing_blocked.amount_usdt)
                         existing_blocked.finished = True
                 else:
                     # Crear nuevo registro
@@ -129,3 +132,25 @@ def get_balance_blocked_total_usdt(user_id: str) -> float:
                 print(f"Error obteniendo balance bloqueado total para {user_id}: {e}")
                 return 0.0
     return 0.0
+
+def get_all_balance_blocked(user_id: str, days: int):
+    from main import app_instance
+    app = app_instance
+
+    if app and hasattr(app, 'app_context'):
+        with app.app_context():
+            try:
+                start_date = datetime.now() - timedelta(days=days)
+                print(start_date)
+
+                blocked_records = BlockedBalanceDB.query.filter(
+                    BlockedBalanceDB.user_id == user_id,
+                    BlockedBalanceDB.fecha >= start_date,
+                    BlockedBalanceDB.fecha <= datetime.now() +  timedelta(days=1)
+                ).order_by(BlockedBalanceDB.fecha.asc()).all()
+                
+                return blocked_records
+            except Exception as e:
+                print(f"Error obteniendo la lista de balances de {user_id}: {e}")
+                return []
+    return []

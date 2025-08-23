@@ -1,4 +1,4 @@
-from flask import Blueprint, redirect, render_template, request, jsonify, url_for
+from flask import Blueprint, render_template, request, jsonify
 from flask_login import login_required, current_user
 from app.iu.routes.utils.utils import get_translated_text
 from app.models.users import get_referred_by_user
@@ -63,7 +63,7 @@ def home_wallet():
     balance_general = wallet.get_balance("general")  # Get only general wallet balance
     
     # Calculate performance metrics
-    performance = wallet.get_accumulated_performance("USDT")
+    performance = wallet.get_accumulated_performance()
     initial_capital = wallet.get_initial_capital("USDT")
 
     # Calculate pending balance (transactions with verification=False)
@@ -76,9 +76,11 @@ def home_wallet():
     disabled_withdraw, _ = withdrawal_period_active(last_verified)
     balance_blocked = wallet.get_balance_blocked_usdt()
     print(f"last_verified: {disabled_withdraw}")
+    
+    print(performance)
 
     if request.method == 'GET':
-        return render_template("wallet.html", 
+        return render_template("wallet.html",
                                 name=name, 
                                 balance=balance,
                                 balance_general=balance_general,
@@ -329,28 +331,20 @@ def get_wallet_chart_data():
         wallet = Wallet(user_id)
         
         # Get chart data from wallet class
-        chart_data_raw = wallet.get_chart_data(days=1)
+        chart_data_raw = wallet.get_chart_data(days=30)
         
         # Format data for Chart.js
         chart_data = {
             "labels": chart_data_raw["labels"],
             "datasets": [
                 {
-                    "label": "Ganancias",
-                    "data": chart_data_raw["earnings_data"],
+                    "label": "generado",
+                    "data": chart_data_raw["data"],
                     "borderColor": "rgb(75, 192, 192)",
                     "backgroundColor": "rgba(75, 192, 192, 0.2)",
-                    "borderWidth": 2,
+                    "borderWidth": 5,
                     "tension": 0.1
                 },
-                {
-                    "label": "Pérdidas",
-                    "data": chart_data_raw["losses_data"],
-                    "borderColor": "rgb(255, 99, 132)",
-                    "backgroundColor": "rgba(255, 99, 132, 0.2)",
-                    "borderWidth": 2,
-                    "tension": 0.1
-                }
             ]
         }
         
@@ -374,41 +368,43 @@ def get_performance_summary():
     Returns JSON with comprehensive performance data
     """
     try:
-        user_id = current_user.id
-        wallet = Wallet(user_id)
+        # user_id = current_user.id
+        # wallet = Wallet(user_id)
         
-        # Get all performance metrics
-        trading_performance = wallet.get_accumulated_performance("USDT")
-        real_performance = wallet.get_real_performance("USDT")
-        open_positions_pnl = wallet.get_open_positions_pnl("USDT")
+        # # Get all performance metrics
+        # trading_performance = wallet.get_accumulated_performance("USDT")
+        # real_performance = wallet.get_real_performance("USDT")
+        # open_positions_pnl = wallet.get_open_positions_pnl("USDT")
         
-        # Calculate total performance including unrealized
-        total_realized = trading_performance["net_performance"]
-        total_unrealized = open_positions_pnl["total_unrealized"]
-        total_performance = total_realized + total_unrealized
+        # # Calculate total performance including unrealized
+        # total_realized = trading_performance["net_performance"]
+        # total_unrealized = open_positions_pnl["total_unrealized"]
+        # total_performance = total_realized + total_unrealized
         
-        # Calculate total performance percentage
-        total_deposits = real_performance["total_deposits"]
-        total_performance_percentage = 0
-        if total_deposits > 0:
-            total_performance_percentage = (total_performance / total_deposits) * 100
+        # # Calculate total performance percentage
+        # total_deposits = real_performance["total_deposits"]
+        # total_performance_percentage = 0
+        # if total_deposits > 0:
+        #     total_performance_percentage = (total_performance / total_deposits) * 100
         
-        summary = {
-            "trading_performance": trading_performance,
-            "real_performance": real_performance,
-            "open_positions": open_positions_pnl,
-            "total_performance": {
-                "realized": total_realized,
-                "unrealized": total_unrealized,
-                "total": total_performance,
-                "percentage": total_performance_percentage
-            }
-        }
+        # summary = {
+        #     "trading_performance": trading_performance,
+        #     "real_performance": real_performance,
+        #     "open_positions": open_positions_pnl,
+        #     "total_performance": {
+        #         "realized": total_realized,
+        #         "unrealized": total_unrealized,
+        #         "total": total_performance,
+        #         "percentage": total_performance_percentage
+        #     }
+        # }
         
-        return jsonify({
-            "success": True,
-            "data": summary
-        })
+        # return jsonify({
+        #     "success": True,
+        #     "data": summary
+        # })
+        
+        return jsonify({})
         
     except Exception as e:
         logger.error(f"Error getting performance summary: {e}")

@@ -1,4 +1,5 @@
-from app.models.blocked_balance import add_quantity_to_block, get_balance_blocked_total_usdt, get_blocked_quantity
+from app.models.blocked_balance import add_quantity_to_block, get_all_balance_blocked, get_balance_blocked_total_usdt, get_blocked_quantity
+from app.models.user_performance import get_user_balance
 from app.viewmodels.api.exchange.Kraken.KrakenAPIFutures import KrakenFuturesExchange
 from app.viewmodels.api.exchange.Bingx.BingxExchange import BingxExchange
 from app.viewmodels.api.exchange.Kraken.KrakenSpotExchange import KrakenSpotExchange
@@ -197,205 +198,58 @@ class Wallet:
             print(f"Error getting pending balance: {e}")
             return 0
 
-    def get_accumulated_performance(self, currency: str = "USDT"):
-        """
-        Calculate accumulated performance (gains/losses) from trading activities
-        Args:
-            currency: The currency to check (default: USDT)
-        Returns:
-            dict: Contains total_gains, total_losses, net_performance, and performance_percentage
-        """
+    def get_accumulated_performance(self):
         try:
-            # Get all trades for this user
-            all_trades = Trade.query.filter_by(user_id=self.user_id).order_by(Trade.timestamp.asc()).all()
+            profit_and_loss_results = get_user_balance(self.user_id)
+
+            # total_gains = 0.00
+            # total_losses = 0.00
+            # net_performance = 0.00
             
-            total_gains = 0
-            total_losses = 0
-            position_trades = {}  # Track open positions by symbol
-            
-            for trade in all_trades:
-                symbol = trade.symbol
-                direction = trade.order_direction
-                volume = trade.volume
-                price = trade.price
+            # blocked_balances = self.get_list_balance_blocked()
+            # for balance in blocked_balances:
+            #     if balance.amount_usdt < 0:
+            #         total_losses += balance.amount_usdt
+            #     else:
+            #         total_gains += balance.amount_usdt
                 
-                # Calculate the value in USD (since price is already in USD for futures)
-                trade_value = volume * price
-                
-                if symbol not in position_trades:
-                    position_trades[symbol] = []
-                
-                if direction == "buy":
-                    # Add to position
-                    position_trades[symbol].append({
-                        'volume': volume,
-                        'price': price,
-                        'value': trade_value
-                    })
-                elif direction == "sell":
-                    # Calculate P&L for this sell
-                    if position_trades[symbol]:
-                        # Use FIFO method to calculate P&L
-                        remaining_volume = volume
-                        total_cost = 0
-                        total_volume_bought = 0
-                        
-                        # Calculate average cost from buy trades
-                        for buy_trade in position_trades[symbol]:
-                            if remaining_volume <= 0:
-                                break
-                            
-                            volume_to_use = min(remaining_volume, buy_trade['volume'])
-                            total_cost += volume_to_use * buy_trade['price']
-                            total_volume_bought += volume_to_use
-                            remaining_volume -= volume_to_use
-                        
-                        if total_volume_bought > 0:
-                            avg_cost = total_cost / total_volume_bought
-                            sell_value = volume * price
-                            cost_value = volume * avg_cost
-                            pnl = sell_value - cost_value
-                            
-                            if pnl > 0:
-                                total_gains += pnl
-                            else:
-                                total_losses += abs(pnl)
+            #     net_performance += balance.amount_usdt
             
-            # Calculate net performance
-            net_performance = total_gains - total_losses
-            
-            # Get initial capital from wallet deposits
-            initial_capital = self.get_initial_capital(currency)
-            
-            # Calculate performance percentage
-            performance_percentage = 0
-            if initial_capital > 0:
-                performance_percentage = (net_performance / initial_capital) * 100
-            
-            return {
-                "total_gains": total_gains,
-                "total_losses": total_losses,
-                "net_performance": net_performance,
-                "performance_percentage": performance_percentage,
-                "initial_capital": initial_capital
-            }
+            return profit_and_loss_results
             
         except Exception as e:
             print(f"Error calculating accumulated performance: {e}")
             return {
                 "total_gains": 0,
                 "total_losses": 0,
-                "net_performance": 0,
-                "performance_percentage": 0,
-                "initial_capital": 0
+                "net_performance": 0
             }
 
     def get_chart_data(self, days: int = 30):
-        """
-        Get daily gains and losses data for chart visualization
-        Args:
-            days: Number of days to look back (default: 30)
-        Returns:
-            dict: Contains labels, earnings_data, and losses_data for Chart.js
-        """
-        try:
-            # Get trades from the specified number of days ago
-            start_date = datetime.now() - timedelta(days=days)
+        balances = get_all_balance_blocked(self.user_id, days)
+        labels = []
+        data = []
+
+        position_trades = {}
+
+        for balance in balances:
+            symbol = balance.currency
+            amount_usdt = balance.amount_usdt
+            balance_date = balance.fecha.strftime('%Y-%m-%d')
             
-            # Get trades from the specified number of days ago
-            trades = Trade.query.filter(
-                Trade.user_id == self.user_id,
-                Trade.timestamp >= start_date,
-                Trade.timestamp <= datetime.now()
-            ).order_by(Trade.timestamp.asc()).all()
-            
-            # Initialize data structures for daily tracking
-            daily_data = {}
-            labels = []
-            earnings_data = []
-            losses_data = []
-            
-            # Generate date labels for the last 'days' days
-            for i in range(days):
-                date = (datetime.now() - timedelta(days=days-1-i)).strftime('%Y-%m-%d')
-                labels.append(date)
-                daily_data[date] = {'gains': 0, 'losses': 0}
-            
-            # Process trades and calculate daily P&L
-            position_trades = {}  # Track open positions by symbol
-            
-            for trade in trades:
-                symbol = trade.symbol
-                direction = trade.order_direction
-                volume = trade.volume
-                price = trade.price
-                trade_date = trade.timestamp.strftime('%Y-%m-%d')
+            if symbol not in position_trades:
+                position_trades[symbol] = []
                 
-                # Skip if trade date is not in our range
-                if trade_date not in daily_data:
-                    continue
-                
-                # Calculate the value in USD
-                trade_value = volume * price
-                
-                if symbol not in position_trades:
-                    position_trades[symbol] = []
-                
-                if direction == "buy":
-                    # Add to position
-                    position_trades[symbol].append({
-                        'volume': volume,
-                        'price': price,
-                        'value': trade_value
-                    })
-                elif direction == "sell":
-                    # Calculate P&L for this sell
-                    if position_trades[symbol]:
-                        # Use FIFO method to calculate P&L
-                        remaining_volume = volume
-                        total_cost = 0
-                        total_volume_bought = 0
-                        
-                        # Calculate average cost from buy trades
-                        for buy_trade in position_trades[symbol]:
-                            if remaining_volume <= 0:
-                                break
-                            
-                            volume_to_use = min(remaining_volume, buy_trade['volume'])
-                            total_cost += volume_to_use * buy_trade['price']
-                            total_volume_bought += volume_to_use
-                            remaining_volume -= volume_to_use
-                        
-                        if total_volume_bought > 0:
-                            avg_cost = total_cost / total_volume_bought
-                            sell_value = volume * price
-                            cost_value = volume * avg_cost
-                            pnl = sell_value - cost_value
-                            
-                            # Add to daily data
-                            if pnl > 0:
-                                daily_data[trade_date]['gains'] += pnl
-                            else:
-                                daily_data[trade_date]['losses'] += abs(pnl)
-            
-            # Convert daily data to arrays for Chart.js
-            for date in labels:
-                earnings_data.append(daily_data[date]['gains'])
-                losses_data.append(daily_data[date]['losses'])
-            
-            return {
-                "labels": labels,
-                "earnings_data": earnings_data,
-                "losses_data": losses_data
-            }
-            
-        except Exception as e:
-            print(f"Error getting chart data: {e}")
-            return {
-                "labels": [],
-                "earnings_data": [],
-                "losses_data": []
-            }
+            position_trades[symbol].append({
+                'amount': amount_usdt,
+                'date': balance_date
+            })
+            data.append(amount_usdt)
+            labels.append(balance_date)
+        return {
+            "labels": labels,
+            "data": data
+        }
 
     def has_balance_in_currency(self, amount: float, symbol_base: str, symbol_compare: str, exchange_name: str, type_exchange: str = "kraken_spot") -> bool:
         """
@@ -542,6 +396,11 @@ class Wallet:
     
     def get_balance_blocked_usdt(self) -> float:
         return get_balance_blocked_total_usdt(self.user_id)
+
+    def get_list_balance_blocked(self):
+        return get_all_balance_blocked(self.user_id)
+
+
 
 class WalletAdmin:
     def __init__(self):
