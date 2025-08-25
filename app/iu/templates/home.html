@@ -44,24 +44,6 @@
               <h1 class="text-4xl font-bold mb-2">Welcome to Aegis-IA</h1>
               <p class="text-lg mb-2">Leverage the power of AI for smarter trading decisions.</p>
             </div>
-            <div class="crypto-section bg-gray-100 p-4 rounded mb-8">
-              <h2 class="text-2xl font-bold mb-4">Cryptocurrencies</h2>
-              <button id="change-mode-btn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" style="display:  none;"></button>
-              <div class="flex items-center mb-4 flex-wrap flex-col w-100">
-                <!-- Aqui va la barra de busqueda -->
-                <div class="flex items-center mb-4 flex-wrap gap-3">
-                 <!--  <input type="submit" id="fetchCryptos" value="Buscar cryptos" class="bg-blue-500 text-white px-4 py-2 rounded mr-2"> -->
-
-                  <div class="relative flex-grow">
-                    <input type="text" id="crypto-search" class="form-control mb-2" placeholder="Search cryptos...">
-                  </div>
-  
-                </div>
-                <!-- Aqui va la lista de cryptos -->
-                <ul  id="crypto-list" class="list-group" style="max-height: 400px; overflow-y: auto;"></ul>
-              </div>
-            
-            </div>
             <div id="tradingview_chart" class="w-full h-96 mb-4"></div>
 
             <!-- Include Trading Component -->
@@ -207,43 +189,7 @@ async function placeOrder(orderDirection) {
 </script>
     
 <script>
-  // change change mode button text depend on current method mode (futures or spot)
-
-  function renderChangeModeBtn() {
-    const changeModeBtn = document.getElementById('change-mode-btn')
-    const currentMode = localStorage.getItem('method')
-    if (currentMode === 'futures') {
-      changeModeBtn.textContent = 'Change to Spot'
-    } else {
-      changeModeBtn.textContent = 'Change to Futures'
-    }
-
-    // update crypto list
-    updateCryptoList()
-  }
-
-  const changeModeBtn = document.getElementById('change-mode-btn')
-  changeModeBtn.addEventListener('click', () => {
-    const currentMode = localStorage.getItem('method')
-    if (currentMode === 'futures') {
-      localStorage.setItem('method', 'spot')
-      renderChangeModeBtn()
-    } else {
-      localStorage.setItem('method', 'futures')
-      renderChangeModeBtn()
-      const symbol = localStorage.getItem('symbol')
-      if (symbol) {
-        changeTradingViewSymbol(symbol)
-      }
-    }  
-  }
-  )
-  renderChangeModeBtn()
-
-  const fetchCryptosBtn = document.getElementById('fetchCryptos')
-  const input = document.getElementById('crypto-search')
-  
-  function changeTradingViewSymbol(newSymbol, exchange = "KRAKEN") {
+    function changeTradingViewSymbol(newSymbol, exchange = "KRAKEN") {
     // check if it is in valid format (without :)
     if (newSymbol.includes(':')) {
         newSymbol = newSymbol.replace(':', '');
@@ -255,79 +201,6 @@ async function placeOrder(orderDirection) {
       console.error('TradingView widget instance not found');
     }
   }
-
-
-    async function getCryptos() {
-        // get cryptos
-      try {
-        console.log(`{{url_for('trading.get_cryptos')}}`)
-        const res = await fetch(`{{url_for('trading.get_cryptos')}}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            trading_mode: localStorage.getItem("method"),
-            exchange_name: localStorage.getItem("method"),
-          }),
-        })
-
-        const json = await res.json()
-        return json.cryptos
-      }catch(err) {
-        return;
-      }
-    }
-
-    async function updateCryptoList(cryptoSymbol) {
-      const cryptoList = document.getElementById('crypto-list')
-      const cryptos = await getCryptos()
-
-      if (!cryptos) alert("Error getting cryptos")
-      
-      cryptos.forEach(crypto => {
-        const li = document.createElement('li')
-        li.classList.add('flex', 'justify-between', 'mb-2', 'list-group-item', 'list-group-item-action', 'cursor-pointer')
-        const span = document.createElement('span')
-        const spanExchangeType = document.createElement('span')
-
-        span.textContent = `${crypto.symbol} (${crypto.price})`
-
-        li.addEventListener('click', () => {
-          changeTradingViewSymbol(crypto.symbol)
-
-          // TODO: move to another side
-          // update market price UI
-          updateBuyMarketPrice(crypto.symbol)
-        })
-
-        li.appendChild(span)
-        cryptoList.appendChild(li)
-
-        
-      });
-    }
-
-
-    // Filter crypto list based on search input
-    input.addEventListener('input', (e) => {
-      const searchTerm = e.target.value.toLowerCase()
-      const cryptoItems = document.querySelectorAll('#crypto-list li')
-      
-      cryptoItems.forEach(item => {
-        const cryptoName = item.querySelector('span:first-child').textContent.toLowerCase()
-        if (cryptoName.includes(searchTerm)) {
-          item.style.display = 'flex'
-        } else {
-          item.style.display = 'none'
-        }
-      })
-    })
-
-    document.addEventListener('DOMContentLoaded', () => {
-      updateCryptoList()
-      const symbol = localStorage.getItem("symbol");
-    })
 </script>
   </body>
    

@@ -53,11 +53,11 @@
                         for (let i = 0; i < symbolElements.length; i++) {
                             symbolElements[i].textContent = symbolObj.symbol;
                         }
-                        changeTradingViewSymbol(symbolObj.symbol.split(":")[0].replace("/", ""), exchange);
-                        console.log({
+                        changeTradingViewSymbol(symbolObj.symbol.split(":")[0].replace("/", ""), "{{component_id_suffix}}");
+                        /*console.log({
                             register: window.TradingOrderMakerManager,
                             exchange
-                        })
+                        })*/
                         window.TradingOrderMakerManager["{{ component_id_suffix }}"].refresh();
                     }
                 });

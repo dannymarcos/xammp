@@ -20,8 +20,17 @@ def get_database_uri():
     return db_uri
 
 class Config:
+    # Configuración de la base de datos
     SQLALCHEMY_DATABASE_URI = get_database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 30,
+        "pool_recycle": 1800
+    }
+
     SECRET_KEY = os.getenv('SECRET_KEY', 'una-clave-secreta-muy-dificil')
     TRADING_MODE="spot"
     SYMBOL = "XBTUSD"

@@ -10,6 +10,7 @@ from ccxt.bingx import Position
 from app.config import config
 
 from app.viewmodels.api.exchange.FatherExchange import Exchange
+from ccxt.base.errors import BadSymbol
 
 # Este es el equivalente al BingxExchange que se tenia anteriormente
 class BingxExchange(Exchange):
@@ -210,6 +211,9 @@ class BingxExchange(Exchange):
         try:
             price = self.exchange.fetch_ticker(symbol)["last"]
             return price, None
+        except BadSymbol:  # Catch the specific BadSymbol exception
+            print(f"Symbol {symbol} not found on exchange")
+            return None, f"Symbol {symbol} not found on exchange"
         except Exception as e:
             print(traceback.format_exc())
             return None, str(e)
@@ -344,44 +348,6 @@ class BingxExchange(Exchange):
             
         except Exception as e:
             print(f"❌ Error cerrando {pos_symbol}: {e}")
-
-    def get_bulk_prices(self, currencies):
-        """Obtiene precios para múltiples monedas con manejo de lotes"""
-        if not currencies:
-            return {}
-        
-        prices = {}
-        batch_size = 20  # Ajustar según límites del exchange
-        remaining = set(currencies)
-        
-        # Procesar en lotes
-        for i in range(0, len(currencies), batch_size):
-            batch = currencies[i:i+batch_size]
-            symbols = [f"{c}/USDT" for c in batch]
-            
-            try:
-                tickers = self.exchange.fetch_tickers(symbols)
-                for symbol, ticker in tickers.items():
-                    currency = symbol.split('/')[0]
-                    last_price = ticker.get('last', ticker.get('close'))
-                    if last_price is not None:
-                        prices[currency] = float(last_price)
-                        remaining.discard(currency)
-            except Exception as e:
-                # Fallback para este lote
-                remaining.update(batch)
-        
-        # Manejar monedas restantes individualmente
-        for currency in remaining:
-            try:
-                # Intentar obtener precio directamente
-                price = self.get_symbol_price(f"{clean_currency}/USDT")
-                if price:
-                    prices[currency] = price
-            except Exception:
-                continue
-        
-        return prices
 
     def get_fees(self, order_id, symbol):
         """

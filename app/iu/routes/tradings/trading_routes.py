@@ -457,11 +457,6 @@ def add_order():
                     is_valid, error_msg = validate_master_account_balance(amount * leverage, symbol_base, exchange_id)
                     if not is_valid:
                         return jsonify({"error": error_msg}), 400
-            
-            print("#"*30)
-            print(data["symbol"])
-            print("#"*30)
-            return jsonify({"error": "test"}), 400
 
             order, fees, price_cripto_in_usdt, cost_in_usdt, fees_currency, status_code = exchange.add_order(
                 leverage=data["leverage"],
