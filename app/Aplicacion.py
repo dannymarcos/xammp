@@ -1,12 +1,10 @@
 #app/Aplicacion.py
 
-from flask import Flask, render_template, current_app
+from flask import Flask, render_template
 from flask_cors import CORS
 from flask_login import LoginManager  # Import LoginManager
 from flask_babel import Babel, _
 import sqlalchemy  # Import Babel and _ function for translations
-
-from app.lib.utils.tx import subscribe
 from app.models.create_db import db
 from app.models.users import User  # Import the User model
 from flask_migrate import Migrate
@@ -26,7 +24,6 @@ class Application:
         db.init_app(self.app) #Inicializamos db dentro del constructor
         CORS(self.app)
         migrate = Migrate(self.app, db)
-
         
         # Initialize Babel for translations
         self.babel = Babel(self.app)
@@ -161,7 +158,7 @@ class Application:
         def not_found_error(error):
             return render_template('errors/404.html'), 404
 
-    def run(self, host='0.0.0.0', port=8080, debug=True, threaded=True):
+    def run(self, host='0.0.0.0', port=5050, debug=True, threaded=True):
         self.app.run(host=host, port=port, debug=debug, threaded=threaded)
 
     def _register_user_loader(self):

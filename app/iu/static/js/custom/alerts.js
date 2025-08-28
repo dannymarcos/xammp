@@ -13,7 +13,7 @@ alert = (msg) => {
     icon: msg.toUpperCase().includes("ERROR")?"error":"success",
     title: msg,
     showConfirmButton: false,
-    timer: 3000,
+    timer: msg.toUpperCase().includes("ERROR")?10000:3000,
     customClass: {
       popup: 'swal2-toast-custom'
     }

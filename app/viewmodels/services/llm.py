@@ -91,7 +91,7 @@ class PPOAgent(nn.Module):
         # Solo necesitamos la parte de la política para la inferencia
         return self.pi_mu_net(x)
 
-if Config().ENVIRONMENT != "local":
+if Config().ENVIRONMENT == "production-ia":
     from llama_cpp import Llama
 
     class QwenTradingAssistant:

@@ -1,6 +1,7 @@
 """BingxExchange module provides an interface to interact with the BingX exchange using ccxt."""
 
 import json
+import threading
 from time import sleep
 import traceback
 from datetime import datetime
@@ -17,6 +18,7 @@ class BingxExchange(Exchange):
     """
     Class BingxExchange
     """
+    _lock = threading.Lock()
 
     def __init__(self, trading_mode = "spot", user_id = None) -> None:
         """
@@ -105,104 +107,105 @@ class BingxExchange(Exchange):
         take_profit=0,
         leverage=1,
     ):
-        volume = float(volume)
-        print(
-            f"🤑 [{self.trading_mode}] Placing market {order_direction} order for {volume} {symbol}..."
-        )
+        with BingxExchange._lock:
+            volume = float(volume)
+            print(
+                f"🤑 [{self.trading_mode}] Placing market {order_direction} order for {volume} {symbol}..."
+            )
 
-        params = {}
-        leverage = 1
+            params = {}
+            leverage = 1
 
-        if stop_loss and stop_loss > 0:
-            params["stopLossPrice"] = stop_loss
+            if stop_loss and stop_loss > 0:
+                params["stopLossPrice"] = stop_loss
 
-        if take_profit and take_profit > 0:
-            params["takeProfitPrice"] = take_profit
+            if take_profit and take_profit > 0:
+                params["takeProfitPrice"] = take_profit
 
-        if leverage and leverage > 0:
-            params["leverage"] = leverage
+            if leverage and leverage > 0:
+                params["leverage"] = leverage
 
-        params["positionSide"] = "LONG" if order_direction == "buy" else "SHORT"
-        position_cancel = False
+            params["positionSide"] = "LONG" if order_direction == "buy" else "SHORT"
+            position_cancel = False
 
-        # --- Lógica para cerrar posición opuesta en futuros (swap) ---
-        if self.trading_mode == "swap":
-            try:
-                open_positions = self.exchange.fetch_positions()
+            # --- Lógica para cerrar posición opuesta en futuros (swap) ---
+            if self.trading_mode == "swap":
+                try:
+                    open_positions = self.exchange.fetch_positions()
 
-                for pos in open_positions:
-                    pos_symbol = pos.get('symbol')
-                    pos_side = pos.get('side')  # 'long' o 'short'
-                    contracts = pos.get('contracts')
+                    for pos in open_positions:
+                        pos_symbol = pos.get('symbol')
+                        pos_side = pos.get('side')  # 'long' o 'short'
+                        contracts = pos.get('contracts')
 
-                    contracts_float = 0.0
-                    if contracts is not None:
-                        contracts_float = float(contracts)
-                    else:
-                        raise Exception(f"Error al obtener el número de contratos para {symbol}")
+                        contracts_float = 0.0
+                        if contracts is not None:
+                            contracts_float = float(contracts)
+                        else:
+                            raise Exception(f"Error al obtener el número de contratos para {symbol}")
 
-                    if pos_symbol == symbol and abs(contracts_float) > 0:
-                        if (order_direction == "buy" and pos_side == "short") or (order_direction == "sell" and pos_side == "long"):
-                            print(f"[Bingx] Se detectó posición opuesta abierta en {symbol}. Se cancelara la orden abierta.")
-                            params["reduce_only"] = True
-                            params["positionSide"] = pos['side'].upper()
-                            position_cancel = True
-                        break
-            except Exception as e:
-                print(f"[Bingx] Error al consultar posiciones abiertas: {e}")
+                        if pos_symbol == symbol and abs(contracts_float) > 0:
+                            if (order_direction == "buy" and pos_side == "short") or (order_direction == "sell" and pos_side == "long"):
+                                print(f"[Bingx] Se detectó posición opuesta abierta en {symbol}. Se cancelara la orden abierta.")
+                                params["reduce_only"] = True
+                                params["positionSide"] = pos['side'].upper()
+                                position_cancel = True
+                            break
+                except Exception as e:
+                    print(f"[Bingx] Error al consultar posiciones abiertas: {e}")
 
-        if order_direction == "buy":
-            order = self.exchange.create_market_buy_order(symbol, volume, params=params)
-        else:
-            order = self.exchange.create_market_sell_order(symbol, volume, params=params)
+            if order_direction == "buy":
+                order = self.exchange.create_market_buy_order(symbol, volume, params=params)
+            else:
+                order = self.exchange.create_market_sell_order(symbol, volume, params=params)
 
-        # Save the order to the database
-        order_to_save = {
-            "order_type": order_type,
-            "order_direction": order_direction,
-            "volume": float(order.get("amount")),
-            "symbol": symbol,
-            "price": order.get("price"),
-            "by": order_made_by,
-            "order_close_condition": order.get("stopLossPrice"),
-            "order_description": None,
-            "order_id": order.get("id"),
-            "user_id": self.user_id,
-            "stop_loss": order.get("stopLossPrice") or 0,
-            "take_profit": order.get("takeProfitPrice") or 0,
-            "status": ("close" if position_cancel else "open"),
-            "leverage": leverage,
-            "exchange": (
-                "bingx-spot" if self.trading_mode == "spot" else "bingx-futures"
-            ),
-            "trading_mode": self.trading_mode,
-        }
+            # Save the order to the database
+            order_to_save = {
+                "order_type": order_type,
+                "order_direction": order_direction,
+                "volume": float(order.get("amount")),
+                "symbol": symbol,
+                "price": order.get("price"),
+                "by": order_made_by,
+                "order_close_condition": order.get("stopLossPrice"),
+                "order_description": None,
+                "order_id": order.get("id"),
+                "user_id": self.user_id,
+                "stop_loss": order.get("stopLossPrice") or 0,
+                "take_profit": order.get("takeProfitPrice") or 0,
+                "status": ("close" if position_cancel else "open"),
+                "leverage": leverage,
+                "exchange": (
+                    "bingx-spot" if self.trading_mode == "spot" else "bingx-futures"
+                ),
+                "trading_mode": self.trading_mode,
+            }
 
-        fees = 0.0
-        fees_currency = ""
+            fees = 0.0
+            fees_currency = ""
 
-        price = float(order.get("price"))
+            price = float(order.get("price"))
 
-        while True:
-            fees, fees_currency = self.get_fees(order.get("id"), order.get("symbol"))
-            if fees is not None:
-                break
-            sleep(5)
+            while True:
+                fees, fees_currency = self.get_fees(order.get("id"), order.get("symbol"))
+                if fees is not None:
+                    break
+                sleep(5)
 
-        cost = order["cost"]
+            cost = order["cost"]
 
-        if order_direction == "buy":
-            order_to_save["volume"] -= fees / price
+            if order_direction == "buy":
+                order_to_save["volume"] -= fees / price
 
-        order_saved = self.add_order_to_db(order_to_save)
-        if not order_saved:
-            return {"error": "Error saving order to database"}, 500
+            order_saved = self.add_order_to_db(order_to_save)
+            if not order_saved:
+                return {"error": "Error saving order to database"}, 500
 
-        print(
-            f":white_check_mark: Order saved to database: {json.dumps(order, indent=4)}"
-        )
+            print(
+                f":white_check_mark: Order saved to database: {json.dumps(order, indent=4)}"
+            )
 
-        return order_saved, fees, price, cost, fees_currency, 200
+            return order_saved, fees, price, cost, fees_currency, 200
 
     def get_symbol_price(self, symbol):
         # Validate symbol before making API call
@@ -302,10 +305,27 @@ class BingxExchange(Exchange):
             balance_list = []
 
             if self.trading_mode == "swap":
-                # Para futures/swap, usar el balance total
+                
+                open_positions = self.exchange.fetch_positions()
+
+                total_amount_position = 0.00
+
+                for pos in open_positions:
+                    pos_symbol = pos.get('symbol')
+                    contracts = pos.get('contracts')
+                    contracts = float(pos.get('contracts', 0))
+                    contract_size = float(pos.get('contractSize', 0))
+
+                    cripto_amount = contracts * contract_size
+                    ticker = self.exchange.fetch_ticker(pos_symbol)
+                    price = float(ticker['last'])
+                    
+                    total_amount_position += (cripto_amount * price)
+
                 for currency, amount in balance.get("total", {}).items():
+                    total_amount = float(amount) - total_amount_position
                     balance_list.append(
-                        {"currency": currency.upper(), "amount": float(amount)}
+                        {"currency": currency.upper(), "amount": total_amount}
                     )
                 return balance_list
             else:

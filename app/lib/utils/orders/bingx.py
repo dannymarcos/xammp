@@ -91,6 +91,7 @@ def process_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, fl
 			order_direction=data.get('orderDirection'),
 			order_made_by=data.get('order_made_by')
 		)
+		# return False, 0.00
 
 	if isinstance(order_result, tuple):
 		order, fees, price_cripto_in_usdt, cost_in_usdt, fees_currency, status_code = order_result

@@ -1,6 +1,7 @@
 from app.lib.utils.tx import emit
 from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
+from app.config import Config
 import logging, traceback
 from app.models.users import User, update_user_bot_status
 from app.viewmodels.services.TradingBotManager import TradingBotManager
@@ -261,3 +262,23 @@ def get_bot_status():
         logger.error(f"Error getting bot status for user {current_user.id}: {str(e)}")
         logger.debug(f"Error details: {traceback.format_exc()}")
         return jsonify({"bot_status": "error", "error": str(e), "last_error_message": user.last_error_message or ""}), 500
+
+@bot_bp.route("/bot/stop_all", methods=['POST'])
+def stop_all_bots():
+    """
+    Stop all active trading bots for the current user.
+    Expects JSON body with: {"auth": "asdassad20as1d5as50d23as0d"}
+    """
+    try:
+        data = request.get_json()
+        if not data or data.get("auth") != Config().SECRET_KEY:
+            return jsonify({"error": "Unauthorized"}), 403
+        
+        TradingBotManager.stop_all_bots()
+        
+        return jsonify({"status": "Processed all bots"}), 200
+        
+    except Exception as e:
+        logger.error(f"Error stopping all bots for user {current_user.id}: {str(e)}")
+        logger.debug(f"Error details: {traceback.format_exc()}")
+        return jsonify({"error": str(e), "bot_status": "error"}), 500

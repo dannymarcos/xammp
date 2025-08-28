@@ -21,6 +21,9 @@ def get_database_uri():
 
 class Config:
     # Configuración de la base de datos
+    PORT = os.getenv("PORT", 8080)
+    THREADS = os.getenv("THREADS", 12)
+
     SQLALCHEMY_DATABASE_URI = get_database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 

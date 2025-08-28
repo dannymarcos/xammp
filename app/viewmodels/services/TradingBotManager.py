@@ -268,6 +268,27 @@ class TradingBotManager:
             logger.debug(f"Error details: {traceback.format_exc()}")
             return False
 
+    @classmethod
+    def stop_all_bots(cls):
+        """
+        Detiene todos los bots activos, tanto los nuevos como los legacy.
+        """
+        for user_id in list(cls._bots.keys()):
+            for bot_id in list(cls._bots[user_id].keys()):
+                try:
+                    cls.stop_bot(user_id, bot_id)
+                except Exception as e:
+                    logger.error("Error al detener el bot %s para el usuario %s: %s", bot_id, user_id, str(e))
+
+        for user_id in list(cls._legacy_bots.keys()):
+            for bot_id in list(cls._legacy_bots[user_id].keys()):
+                try:
+                    cls.stop_legacy_bot(user_id, bot_id)
+                except Exception as e:
+                    logger.error("Error al detener el bot legacy %s para el usuario %s: %s", bot_id, user_id, str(e))
+        
+        logger.info("Todos los bots han sido detenidos.")
+
 
 def run_trading_bot(
     app, exchange, config, stop_event

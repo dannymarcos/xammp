@@ -126,7 +126,6 @@ def get_method_trading():
         trading_mode = method_instance.get_method()
         return jsonify({"method": trading_mode})
     except Exception as e:
-        logger.error(f"Error getting cryptocurrencies: {e}")
         return jsonify({"error": str(e)}), 500
 
 @trading_bp.route("/get_symbol_trading")
@@ -136,7 +135,6 @@ def get_symbol_trading():
         symbol = symbol_instance.get_symbol()
         return jsonify({"symbol": symbol})
     except Exception as e:
-        logger.error(f"Error getting cryptocurrencies: {e}")
         return jsonify({"error": str(e)}), 500
 
 @trading_bp.route("/get_cryptos", methods=['POST'])
