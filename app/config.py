@@ -21,8 +21,11 @@ def get_database_uri():
 
 class Config:
     # Configuración de la base de datos
+    IP = os.getenv("IP", "127.0.0.1")
     PORT = os.getenv("PORT", 8080)
     THREADS = os.getenv("THREADS", 12)
+    CONNECTION_LIMIT = os.getenv("CONNECTION_LIMIT", 1000)
+    CHANNEL_TIMEOUT = os.getenv("CHANNEL_TIMEOUT", 3000)
 
     SQLALCHEMY_DATABASE_URI = get_database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False

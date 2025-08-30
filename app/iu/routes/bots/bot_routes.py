@@ -137,6 +137,11 @@ def start_bot_trading():
         elif price is None:
             # If price is None, raise an error
             raise ValueError("Invalid price response")
+        
+        if bot_id == "strategy-bot" and TradingBotManager.is_bot_running(user_id=user_id, bot_id="basic-bot"):
+            return jsonify({"error": "You have an active basic-bot. Please turn it off to make the trade"}), 400
+        if bot_id == "basic-bot" and TradingBotManager.is_bot_running(user_id=user_id, bot_id="strategy-bot"):
+            return jsonify({"error": "You have an active strategy-bot. Please turn it off to make the trade"}), 400
 
         # Now you can safely perform the multiplication
         amount_in_usdt = trade_amount * price

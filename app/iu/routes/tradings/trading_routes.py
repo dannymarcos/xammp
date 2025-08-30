@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from flask_login import login_required, current_user
 import logging, traceback, os, time
 from app.viewmodels.api.spot.KrakenSpotApiGetAccountBalance import KrakenSpotApiGetAccountBalance
+from app.viewmodels.services.TradingBotManager import TradingBotManager
 from app.viewmodels.services.GetMethodTrading import GetMethodTrading
 from app.viewmodels.services.GetSymbolTrading import GetSymbolTrading
 from app.viewmodels.api.spot.KrakenSpotAPITicker import KrakenSpotAPI
@@ -283,6 +284,11 @@ def add_order():
         data = request.get_json()
         trading_mode = data.get("trading_mode")
         user_id = current_user.id
+        if TradingBotManager.is_bot_running(user_id=user_id, bot_id="basic-bot"):
+            return jsonify({"error": "You have an active basic-bot. Please turn it off to make the trade"}), 400
+        if TradingBotManager.is_bot_running(user_id=user_id, bot_id="strategy-bot"):
+            return jsonify({"error": "You have an active strategy-bot. Please turn it off to make the trade"}), 400
+        
         wallet = Wallet(user_id)
 
         # Initialize WalletAdmin for recording transactions

@@ -42,17 +42,30 @@ if __name__ == "__main__":
     )
     
     try:
+        ip = Config().IP
         port = Config().PORT
         threads = Config().THREADS
         environment = Config().ENVIRONMENT
+        connection_limit = Config().CONNECTION_LIMIT
+        channel_timeout = Config().CHANNEL_TIMEOUT
 
         if environment in ["production", "production-ia"]:
             logger.info("Starting Waitress server for production...")
             logger.info("================")
-            logger.info(f" PORT      {port}")
-            logger.info(f" THREADS   {threads}")
+            logger.info(f" PORT              {port}")
+            logger.info(f" THREADS           {threads}")
+            logger.info(f" CONNECTION LIMIT  {connection_limit}")
+            logger.info(f" CHANNEL TIMEOUT   {channel_timeout}")
             logger.info("================")
-            serve(app, host='127.0.0.1', port=port, threads=threads)
+
+            serve(
+                app, 
+                host=ip,
+                port=port, 
+                threads=threads,
+                connection_limit=connection_limit,
+                channel_timeout=channel_timeout
+            )
         else:
             logger.info("Starting the server in dev mode...")
             app_instance.run(debug=True)
