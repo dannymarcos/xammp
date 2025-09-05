@@ -1,13 +1,13 @@
 import logging
 import flask
-from app.models.trades import get_buy_trades_between_sells, set_trade_actual_profit_in_usd
+# from app.models.trades import get_trades_between_orders, set_trade_actual_profit_in_usd
 from app.viewmodels.api.exchange.Exchange import ExchangeFactory
 from app.iu.routes.tradings.trading_routes import get_current_price, validate_master_account_balance
-from app.viewmodels.wallet.found import Wallet
+from app.viewmodels.wallet.found import Wallet, WalletAdmin
 
 logger = logging.getLogger(__name__)
 
-def process_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, float]:
+def process_order(user_id: int, data: dict, trading_mode: str, type_bot: str) -> tuple[bool, float]:
 	wallet = Wallet(user_id=user_id)
 
 	# Ajustar símbolo según trading_mode
@@ -44,26 +44,39 @@ def process_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, fl
 
 	# Validación de saldos
 	if data.get('orderDirection') == 'buy':
-		if not wallet.has_balance_in_currency(total_cost, 'USDT', 'USDT', 'general'):
+		if not wallet.has_balance_in_currency(total_cost, 'USDT', 'USDT', 'general', trading_mode == 'bingx_futures', data.get('orderDirection'), type_bot):
 			logger.error(f'Insufficient USDT balance: {total_cost}')
 			return False, 0.00
-		
-		is_valid, _ = validate_master_account_balance(price_calc, 'USDT', trading_mode)
-		if not is_valid:
-			logger.error('Master account USDT balance insufficient')
-			return False, 0.00
+			
+		if trading_mode == 'bingx_spot':
+			is_valid, _ = validate_master_account_balance(price_calc, 'USDT', trading_mode)
+			if not is_valid:
+				logger.error('Master account USDT balance insufficient')
+				return False, 0.00
 	elif data.get('orderDirection') == 'sell':
 		required_balance = amount * leverage
 
-		if wallet.get_blocked_balance(currency="BTC/USDT", by_bot=data["order_made_by"])["amount_crypto"] < required_balance:
-			logger.error(f'Insufficient {symbol_base} balance: {required_balance}')
-			return False, 0.00
+		if not wallet.has_balance_in_currency(total_cost, 'USDT', 'USDT', 'general', trading_mode == 'bingx_futures', data.get('orderDirection'), type_bot):
+			logger.error(f'Insufficient USDT balance: {total_cost}')
+			return False, 0.00			
 
 		if trading_mode == 'bingx_spot':
+			if wallet.get_blocked_balance(currency="BTC/USDT", by_bot=data["order_made_by"])["amount_crypto"] < required_balance:
+				logger.error(f'Insufficient {symbol_base} balance: {required_balance}')
+				return False, 0.00
+
 			is_valid, _ = validate_master_account_balance(required_balance, symbol_base, trading_mode)
 			if not is_valid:
 				logger.error(f'Master account {symbol_base} balance insufficient')
 				return False, 0.00
+
+	_blocked_balance_ = wallet.get_blocked_balance(currency="BTC/USDT", by_bot=data["order_made_by"])
+	start_with = _blocked_balance_["start_with"]
+	if start_with != None:
+		the_contrary_to_what_be_started_at = "sell" if start_with == "buy" else "buy"
+		if(data.get('orderDirection') == the_contrary_to_what_be_started_at):
+			data['amount'] = abs(_blocked_balance_["amount_crypto"])
+			data['volume'] = abs(_blocked_balance_["amount_crypto"])
 
 	# Realizar la orden usando contexto Flask
 	if not flask.has_app_context():
@@ -91,7 +104,6 @@ def process_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, fl
 			order_direction=data.get('orderDirection'),
 			order_made_by=data.get('order_made_by')
 		)
-		# return False, 0.00
 
 	if isinstance(order_result, tuple):
 		order, fees, price_cripto_in_usdt, cost_in_usdt, fees_currency, status_code = order_result
@@ -106,28 +118,36 @@ def process_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, fl
 		amount_traded = amount * leverage
 		cost_in_usdt = float(cost_in_usdt)
 		fees = float(fees)
+
 		if data.get('orderDirection') == 'buy':
 			wallet.add_blocked_balance(
 				amount_usdt=-(cost_in_usdt - fees),
 				amount_crypto=amount_traded,
 				currency="BTC/USDT",
-				by_bot=data["order_made_by"]
+				by_bot=data["order_made_by"],
+				order="buy"
 			)
 		elif data.get('orderDirection') == 'sell':
 			wallet.add_blocked_balance(
 				amount_usdt=(cost_in_usdt - fees),
 				amount_crypto=-amount_traded,
 				currency="BTC/USDT",
-				by_bot=data["order_made_by"]
+				by_bot=data["order_made_by"],
+				order="sell"
 			)
    
-			trades = get_buy_trades_between_sells(user_id=user_id, by=data.get('order_made_by'))
-			for trade in trades:
-				purchase_price = trade.get("price") * trade.get("volume")
-				selling_price = trade.get("volume") * price_cripto_in_usdt
-				profit = selling_price - purchase_price
-				set_trade_actual_profit_in_usd(trade_id=trade.get("id"), profit_in_usd=profit)
-
+			#############################################
+			# ESTO YA NO ES COMPATIBLE REVISALO DESPUES #
+			#############################################
+			# if start_with != None:
+			# 	the_contrary_to_what_be_started_at = "sell" if start_with == "buy" else "buy"
+			# 	if(data.get('orderDirection') == the_contrary_to_what_be_started_at):
+			# 		trades = get_trades_between_orders(user_id, the_contrary_to_what_be_started_at, data.get('order_made_by'))
+			# 		for trade in trades:
+			# 			purchase_price = trade.get("price") * trade.get("volume")
+			# 			selling_price = trade.get("volume") * price_cripto_in_usdt
+			# 			profit = selling_price - purchase_price
+			# 			set_trade_actual_profit_in_usd(trade_id=trade.get("id"), profit_in_usd=profit)
 		else:
 			return False, 0.00
 	except Exception as e:

@@ -13,7 +13,7 @@ from app.viewmodels.wallet.found import Wallet, WalletAdmin
 
 logger = logging.getLogger(__name__)
 
-def add_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, float]:
+def add_order(user_id: int, data: dict, trading_mode: str, type_bot: str) -> tuple[bool, float]:
   try:
     print(f"[add_order] user_id={user_id}")
     print(f"[add_order] trading_mode={trading_mode}")
@@ -21,14 +21,10 @@ def add_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, float]
     wallet_admin = WalletAdmin()
     wallet = Wallet(user_id=user_id)
 
-    isSuccess = False;
+    isSuccess = False
     
-    if trading_mode == "kraken_spot":
-      isSuccess, _ = process_kraken_spot(user_id, data)
-    elif trading_mode in ["bingx_spot", "bingx_futures"]:
-      isSuccess, _ = process_bingx(user_id, data, trading_mode)
-    elif trading_mode == "kraken_futures":
-      isSuccess, _ = process_kraken_futures(user_id, data)
+    if trading_mode in ["bingx_spot", "bingx_futures"]:
+      isSuccess, _ = process_bingx(user_id, data, trading_mode, type_bot)
     else:
       logger.error(f"Invalid trading mode: {trading_mode}")
       return False, 0.00
@@ -37,20 +33,25 @@ def add_order(user_id: int, data: dict, trading_mode: str) -> tuple[bool, float]
       print("ERROR")
       return False, 0.00
     
-    user_is_usdt_amount = wallet.get_blocked_balance(
+    _balance_blocked_ = wallet.get_blocked_balance(
       by_bot=data["order_made_by"],
       currency="BTC/USDT",
       finished=True
-    )["amount_usdt"]
+    )
+    
+    user_is_usdt_amount = _balance_blocked_["amount_usdt"]
+    if(wallet.get_blocked_balance(by_bot=data["order_made_by"], currency="BTC/USDT", finished=False)["start_with"] == None):
+      start_with = _balance_blocked_["start_with"]
+      opuesto = "sell" if start_with == "buy" else "buy"
 
-    if data.get("orderDirection") == "sell":
-      if user_is_usdt_amount >= 0:
-        print("ganancias:", user_is_usdt_amount)
-      else:
-        print("perdidas:", user_is_usdt_amount)
+      if data.get("orderDirection") == opuesto:
+        if user_is_usdt_amount >= 0:
+          print("ganancias:", user_is_usdt_amount)
+        else:
+          print("perdidas:", user_is_usdt_amount)
 
-      wallet_admin.add_found(user_id, user_is_usdt_amount, "USDT", "general")
-      set_trade_actual_profit_in_usd(trade_id="last", profit_in_usd=user_is_usdt_amount, user_id=user_id, by=data["order_made_by"])
+        wallet_admin.add_found(user_id, user_is_usdt_amount, "USDT", "general")
+        set_trade_actual_profit_in_usd(trade_id="last", profit_in_usd=user_is_usdt_amount, user_id=user_id, by=data["order_made_by"], type_order=opuesto)
 
     return True, user_is_usdt_amount
   except Exception as e:

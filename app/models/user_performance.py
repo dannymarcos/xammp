@@ -59,37 +59,37 @@ def get_user_balance(user_id):
 				}
 
 def update_user_performance(user_id, amount):
-    from main import app_instance
-    
-    with app_instance.app_context():
-        try:
-            performance_record = PerformanceUser.query.filter_by(user_id=user_id).first()
-            
-            if performance_record:
-                if amount >= 0:
-                    performance_record.total_gains += amount
-                else:
-                    performance_record.total_losses += amount
-                
-                performance_record.net_performance += amount
-                performance_record.update()
-            else:
-                total_losses = 0.0
-                total_gains = 0.0
+	from main import app_instance
+	
+	with app_instance.app_context():
+		try:
+			performance_record = PerformanceUser.query.filter_by(user_id=user_id).first()
+			
+			if performance_record:
+				if amount >= 0:
+					performance_record.total_gains += amount
+				else:
+					performance_record.total_losses += amount
+				
+				performance_record.net_performance += amount
+				performance_record.update()
+			else:
+				total_losses = 0.0
+				total_gains = 0.0
 
-                if amount >= 0:
-                    total_gains = amount
-                else:
-                    total_losses = amount
-                
-                new_record = PerformanceUser(
-                    user_id=user_id,
-                    total_gains=total_gains,
-                    total_losses=total_losses,
-                    net_performance=amount
-                )
-                new_record.save()
-                
-        except Exception as e:
-            print(f"Error actualizando el performance del usuario {user_id}: {e}")
-            db.session.rollback()
+				if amount >= 0:
+					total_gains = amount
+				else:
+					total_losses = amount
+				
+				new_record = PerformanceUser(
+					user_id=user_id,
+					total_gains=total_gains,
+					total_losses=total_losses,
+					net_performance=amount
+				)
+				new_record.save()
+				
+		except Exception as e:
+			print(f"Error actualizando el performance del usuario {user_id}: {e}")
+			db.session.rollback()

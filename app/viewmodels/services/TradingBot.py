@@ -112,6 +112,7 @@ class TradingBot:
         self.user_id = user_id
         self.exchange = exchange
         self.wallet = Wallet(self.user_id)
+        self.test = 0
 
         try:
             logger.info("Initializing trading bot for user %s", user_id)
@@ -599,7 +600,6 @@ class TradingBot:
         take_profit_pct = getattr(self.config, "take_profit_pct", 0.04)
 
         # --- Buy/Sell Logic ---
-
         if (signals["buy"] or signals["sell"]) and len(self.active_trades) < max_active_trades:
             logger.info(f"➡️ {"BUY" if signals["buy"] else "SELL"} signal received. Attempting to create order.")
             # Calcular stop_loss y take_profit basados en porcentajes
@@ -607,11 +607,12 @@ class TradingBot:
             take_profit_price = current_price * (1 + take_profit_pct)
 
             volume = self.config.trade_amount
-            
-            if signals["sell"]:
+            trading_mode = getattr(self.config, "basic_bot_trading_mode_full", "spot")
+
+            if signals["sell"] and not trading_mode == "bingx_futures":
                 volume = self.wallet.get_blocked_balance(currency="BTC/USDT", by_bot="basic-bot")["amount_crypto"]
                 if volume <= 0.00:
-                    emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"No funds purchased for sale"})
+                    emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": "No funds purchased for sale"})
                     return
 
             print(volume)
@@ -811,7 +812,6 @@ class TradingBot:
             "orderType": order_type,
             "volume": volume,
             "amount": volume,
-            "symbol": symbol,
             "leverage": leverage
         }
         
@@ -840,7 +840,7 @@ class TradingBot:
         data["order_made_by"] = "basic-bot"
 
         from app.lib.utils.add_order import add_order
-        success, amount_obtained_from_the_order_crypto = add_order(user_id=user_id, data=data, trading_mode=trading_mode)
+        success, amount_obtained_from_the_order_crypto = add_order(user_id=user_id, data=data, trading_mode=trading_mode, type_bot="basic-bot")
 
         return success, None
 
@@ -1108,28 +1108,30 @@ class TradingBot:
 
         logger.info(f"Attempting to stop bot for user {self.user_id}")
 
-        user_cryptos = self.wallet.get_blocked_balance(currency="BTC/USDT", by_bot="basic-bot")["amount_crypto"]
-        if user_cryptos > 0:
-            current_price = self._get_current_price()
+        _blocked_balances_ = self.wallet.get_blocked_balance(currency="BTC/USDT", by_bot="basic-bot")
+        user_cryptos = abs(_blocked_balances_["amount_crypto"])
+        type_order = "buy" if _blocked_balances_["start_with"] == "sell" else "sell"
+        current_price = self._get_current_price()
 
-            success, _ = self._create_order(
-                order_direction="sell",
-                current_price=current_price,
-                order_type="market",
-                leverage=1.0,
-                stop_loss=None,
-                take_profit=None,
-                volume=user_cryptos,
-                symbol=self.config.trading_pair
-            )
-            
-            if not success:
-                emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"An error occurred when selling {user_cryptos} BTC from your account. To withdraw it, you can go to the trading section and exchange it for USDT"})
-                return
-            
-            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"{user_cryptos} BTC has been successfully sold, and the equivalent amount is in your general account"})
-            emit(email=self.email, event="bot", data={"id": "refresh-history-basic-bot"})
-            emit(email=self.email, event="bot", data={"id": "refresh-balance"})
+        success, _ = self._create_order(
+            order_direction=type_order,
+            current_price=current_price,
+            order_type="market",
+            leverage=1.0,
+            stop_loss=None,
+            take_profit=None,
+            volume=user_cryptos,
+            symbol=self.config.trading_pair
+        )
+        
+        if not success:
+            emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"An error occurred when selling {user_cryptos} BTC from your account. To withdraw it, you can go to the trading section and exchange it for USDT"})
+            return
+        
+        emit(email=self.email, event="bot", data={"id": "basic-bot", "msg": f"{user_cryptos} BTC has been successfully sold, and the equivalent amount is in your general account"})
+        emit(email=self.email, event="bot", data={"id": "refresh-history-basic-bot"})
+        emit(email=self.email, event="bot", data={"id": "refresh-balance"})
+
         if hasattr(self, "thread") and self.thread.is_alive():
             logger.info(f"Joining bot thread for user {self.user_id}...")
             self.thread.join(timeout=10)  # Give thread up to 10 seconds to finish loop

@@ -117,7 +117,7 @@ def update_trade_status(trade_id: str, new_status: str, app_context=None) -> boo
                 return False
     return False
 
-def set_trade_actual_profit_in_usd(trade_id: str, profit_in_usd: Optional[float], user_id: Optional[str] = None, by: Optional[str] = None) -> bool:
+def set_trade_actual_profit_in_usd(trade_id: str, profit_in_usd: Optional[float], user_id: Optional[str] = None, by: Optional[str] = None, type_order: str = "sell") -> bool:
     """
     Sets the actual_profit_in_usd for a specific trade.
     """
@@ -133,7 +133,7 @@ def set_trade_actual_profit_in_usd(trade_id: str, profit_in_usd: Optional[float]
                     
                     last_sell_trade = Trade.query.filter_by(
                         user_id=user_id, 
-                        order_direction='sell',
+                        order_direction=type_order,
                         by=by
                     ).order_by(Trade.created_at.desc()).first()
                     
@@ -154,32 +154,43 @@ def set_trade_actual_profit_in_usd(trade_id: str, profit_in_usd: Optional[float]
                 return False
     return False
 
-def get_buy_trades_between_sells(user_id, by="all"):
-    sell_filters = {
-        "user_id": user_id,
-        "order_direction": "sell",
-        "by": by
-    }
-    
-    recent_sells = Trade.query.filter_by(**sell_filters)\
-                             .order_by(Trade.created_at.desc())\
-                             .limit(2)\
-                             .all()
-    if len(recent_sells) < 2:
-        return []
-    
-    latest_sell, previous_sell = recent_sells[0], recent_sells[1]
-    
-    buy_filters = {
-        "user_id": user_id,
-        "order_direction": "buy",
-        "by": by
-    }
-    
-    buy_trades = Trade.query.filter_by(**buy_filters)\
-                           .filter(Trade.created_at > previous_sell.created_at,
-                                   Trade.created_at < latest_sell.created_at)\
-                           .order_by(Trade.created_at.desc())\
-                           .all()
-    
-    return [trade.serialize for trade in buy_trades]
+def get_trades_between_orders(user_id, boundary_order_direction="sell", by="all"):
+    from main import app_instance
+    app = app_instance
+
+    if app and hasattr(app, 'app_context'):
+        with app.app_context():
+            # Obtener las dos órdenes límite más recientes según boundary_order_direction
+            boundary_filters = {
+                "user_id": user_id,
+                "order_direction": boundary_order_direction,
+                "by": by
+            }
+            
+            recent_boundaries = Trade.query.filter_by(**boundary_filters)\
+                                        .order_by(Trade.created_at.desc())\
+                                        .limit(2)\
+                                        .all()
+            
+            if len(recent_boundaries) < 2:
+                return []
+            
+            latest_boundary, previous_boundary = recent_boundaries[0], recent_boundaries[1]
+            
+            # Determinar automáticamente el tipo de trade opuesto
+            trade_direction = "buy" if boundary_order_direction == "sell" else "sell"
+            
+            # Obtener los trades del tipo opuesto entre las dos órdenes límite
+            trade_filters = {
+                "user_id": user_id,
+                "order_direction": trade_direction,
+                "by": by
+            }
+            
+            target_trades = Trade.query.filter_by(**trade_filters)\
+                                    .filter(Trade.created_at > previous_boundary.created_at,
+                                            Trade.created_at < latest_boundary.created_at)\
+                                    .order_by(Trade.created_at.desc())\
+                                    .all()
+            
+            return [trade.serialize for trade in target_trades]

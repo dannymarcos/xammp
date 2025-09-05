@@ -251,7 +251,7 @@ class Wallet:
             "data": data
         }
 
-    def has_balance_in_currency(self, amount: float, symbol_base: str, symbol_compare: str, exchange_name: str, type_exchange: str = "kraken_spot") -> bool:
+    def has_balance_in_currency(self, amount: float, symbol_base: str, symbol_compare: str, exchange_name: str, is_futures: bool = False, type_order: str = "buy", type_bot: str = "basic-bot", type_exchange: str = "kraken_spot") -> bool:
         """
         Check if the user has the specified amount in symbol_compare
         Args:
@@ -262,9 +262,22 @@ class Wallet:
             bool: True if user has sufficient symbol_compare balance, False otherwise
         """
         try:
-            # Si la moneda ya es USDT, hacer comparación directa
+            # blocked_balance = 0.00
             blocked_balance = abs(self.get_balance_blocked_usdt())
 
+            ##############################################################################################################
+            # El proposito de esto es no bloquear la transacion si la operacion es la contraria
+            # es decir si el balance del usuario es 10 USDT y ya vendio/compro todo el balance
+            # lo unico que se le debe permitir es hacer la operacion contraria
+            if is_futures:
+                start_with = self.get_blocked_balance(by_bot=type_bot, currency="BTC/USDT", finished=False)["start_with"]
+                if start_with != None:
+                    operation_contrary = "sell" if start_with == "buy" else "buy"
+                    if type_order == operation_contrary:
+                        blocked_balance = 0.00
+            ##############################################################################################################
+
+            # Si la moneda ya es USDT, hacer comparación directa
             if symbol_base.upper() == symbol_compare.upper():
                 balance = self.get_balance_by_currency(symbol_base, exchange_name)
 
@@ -272,7 +285,7 @@ class Wallet:
             
             exchange = ExchangeFactory().create_exchange(name=type_exchange, user_id=self.user_id)
             trading_pair = f"{symbol_base}/{symbol_compare}"
-            price_data = exchange.get_symbol_price(trading_pair) # = ({'price': 107735.4}, 200)
+            price_data = exchange.get_symbol_price(trading_pair)
 
             # Extract price from the response
             if isinstance(price_data, tuple):
@@ -285,9 +298,6 @@ class Wallet:
                 current_price = price_data["price"]
             else:
                 current_price = price_data
-
-            print(f"current_price: {current_price}")
-            print("#"*80)
             
             if current_price is None or current_price <= 0:
                 print(f"Error: Could not get price for {trading_pair}")
@@ -297,12 +307,7 @@ class Wallet:
             value_in_usdt = amount * current_price
             
             # Obtener balance actual de USDT
-            print("#"*80)
-            print(f"value_in_usdt: {value_in_usdt}")
             usdt_balance = self.get_balance_by_currency(symbol_compare, exchange_name)
-            print(f"usdt_balance: {usdt_balance}")
-            print(f"usdt_balance >= value_in_usdt: {usdt_balance >= value_in_usdt}")
-            print("#"*80) 
             
             return (usdt_balance - blocked_balance) >= value_in_usdt
             
@@ -388,8 +393,8 @@ class Wallet:
 
         return (balance - blocked_balance)
 
-    def add_blocked_balance(self, amount_usdt: float, amount_crypto: float, currency: str, by_bot: str, exchange: str = "general"):
-        return add_quantity_to_block(self.user_id, amount_usdt, amount_crypto, currency, by_bot, exchange)
+    def add_blocked_balance(self, amount_usdt: float, amount_crypto: float, currency: str, by_bot: str, order: str, exchange: str = "general"):
+        return add_quantity_to_block(self.user_id, amount_usdt, amount_crypto, currency, by_bot, order, exchange)
 
     def get_blocked_balance(self, currency, by_bot: str, exchange: str = "general", finished: bool = False) -> dict:
         return get_blocked_quantity(self.user_id, currency, by_bot, exchange, finished)

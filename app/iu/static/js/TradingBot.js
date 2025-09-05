@@ -422,7 +422,7 @@ export class TradingBot {
 				<td class="text-end">${
 					trade.price ? parseFloat(trade.price*trade.volume).toFixed(4) : "0.00"
 				}</td>
-				<td class="text-end ${trade.order_direction=="buy"?"text-primary":(actual_profit_usd > 0 ? "text-success" : "text-danger")}">${trade.order_direction=="buy"?"--":(actual_profit_usd+"$")}</td>
+				<td class="text-end ${actual_profit_usd==0?"text-primary":(actual_profit_usd > 0 ? "text-success" : "text-danger")}">${actual_profit_usd==0?"--":(actual_profit_usd+"$")}</td>
 				<td>${trade.trading_mode}</td>
 				<td>${trade.exchange}</td>
 			`;
