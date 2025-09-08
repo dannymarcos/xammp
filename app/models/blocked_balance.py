@@ -16,6 +16,7 @@ class BlockedBalanceDB(db.Model):
 	by_bot = db.Column(db.String(255), nullable=False)
 	finished = db.Column(db.Boolean, nullable=False, default=False)
 	start_with = db.Column(db.String(4), nullable=True)
+	market_type = db.Column(db.String(4), nullable=True)
 	fecha = db.Column(db.DateTime, default=datetime.utcnow)
 
 	@property
@@ -36,7 +37,8 @@ def add_quantity_to_block(
 	currency: str, 
 	by_bot: str,
 	order: str,
-	exchange: str = "general"
+	exchange: str = "general",
+	market_type: str = "swap"
 ) -> bool:
 	"""
 	Añade o actualiza un balance bloqueado
@@ -76,6 +78,7 @@ def add_quantity_to_block(
 						currency=currency,
 						by_bot=by_bot,
 						exchange=exchange,
+						market_type=market_type,
 						start_with=order
 					)
 					db.session.add(new_blocked)
@@ -146,12 +149,12 @@ def get_all_balance_blocked(user_id: str, days: int):
 		with app.app_context():
 			try:
 				start_date = datetime.now() - timedelta(days=days)
-				print(start_date)
 
 				blocked_records = BlockedBalanceDB.query.filter(
 					BlockedBalanceDB.user_id == user_id,
 					BlockedBalanceDB.fecha >= start_date,
-					BlockedBalanceDB.fecha <= datetime.now() +  timedelta(days=1)
+					BlockedBalanceDB.fecha <= datetime.now() +  timedelta(days=1),
+					BlockedBalanceDB.finished,
 				).order_by(BlockedBalanceDB.fecha.asc()).all()
 				
 				return blocked_records

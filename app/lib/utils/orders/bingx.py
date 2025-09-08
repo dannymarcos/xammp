@@ -125,7 +125,8 @@ def process_order(user_id: int, data: dict, trading_mode: str, type_bot: str) ->
 				amount_crypto=amount_traded,
 				currency="BTC/USDT",
 				by_bot=data["order_made_by"],
-				order="buy"
+				order="buy",
+				market_type=params['trading_mode']
 			)
 		elif data.get('orderDirection') == 'sell':
 			wallet.add_blocked_balance(
@@ -133,7 +134,8 @@ def process_order(user_id: int, data: dict, trading_mode: str, type_bot: str) ->
 				amount_crypto=-amount_traded,
 				currency="BTC/USDT",
 				by_bot=data["order_made_by"],
-				order="sell"
+				order="sell",
+				market_type=params['trading_mode']
 			)
    
 			#############################################

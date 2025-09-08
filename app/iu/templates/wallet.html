@@ -15,25 +15,26 @@
 			<div class="card">
 				<div class="card-body">
 					<h5 class="card-title" id="title_wallet_balance">Wallet Balance General</h5>
-					
+
 					<div class="d-flex align-items-center">
 						<!-- Individual Balance Display -->
 						<div id="individualBalance">
 							{% if balance %}
-								<h3 id="balanceAmount" class="mt-2">{{ "%.6f"|format(balance_general[0].amount) }} </h3>
+							<h3 id="balanceAmount" class="mt-2">{{ "%.6f"|format(balance_general[0].amount) }} </h3>
 							{% else %}
-								<h3>0.00</h3>
+							<h3>0.00</h3>
 							{% endif %}
 						</div>
 
 						<!-- Currency Selector and Toggle Button -->
-						<select class="form-select" id="currencySelect" style="width: fit-content; font-size: 1.5rem; font-weight: bold; border: none;">
+						<select class="form-select" id="currencySelect"
+							style="width: fit-content; font-size: 1.5rem; font-weight: bold; border: none;">
 							{% if balance_general %}
-								{% for item in balance_general %}
-									<option value="{{ item.currency }}">{{ item.currency }}</option>
-								{% endfor %}
+							{% for item in balance_general %}
+							<option value="{{ item.currency }}">{{ item.currency }}</option>
+							{% endfor %}
 							{% else %}
-								<option value="">USDT</option>
+							<option value="">USDT</option>
 							{% endif %}
 						</select>
 					</div>
@@ -61,32 +62,32 @@
 							</thead>
 							<tbody id="allBalancesTableBody">
 								{% if balance %}
-									{% for item in balance|sort(attribute='currency') %}
-										<tr data-exchange="{{ item.exchange }}">
-											<td>
-												<span class="badge 
+								{% for item in balance|sort(attribute='currency') %}
+								<tr data-exchange="{{ item.exchange }}">
+									<td>
+										<span class="badge 
 													{% if item.exchange == 'general' %}bg-secondary
 													{% elif item.exchange == 'kraken_spot' %}bg-primary
 													{% elif item.exchange == 'kraken_futures' %}bg-info
 													{% elif item.exchange == 'bingx_spot' %}bg-success
 													{% elif item.exchange == 'bingx_futures' %}bg-warning
 													{% else %}bg-secondary{% endif %}">
-													{% if item.exchange == 'general' %}General Wallet
-													{% elif item.exchange == 'kraken_spot' %}Kraken Spot
-													{% elif item.exchange == 'kraken_futures' %}Kraken Futures
-													{% elif item.exchange == 'bingx_spot' %}BingX Spot
-													{% elif item.exchange == 'bingx_futures' %}BingX Futures
-													{% else %}{{ item.exchange }}{% endif %}
-												</span>
-											</td>
-											<td>{{ item.currency }}</td>
-											<td>{{ "%.6f"|format(item.amount) }}</td>
-										</tr>
-									{% endfor %}
+											{% if item.exchange == 'general' %}General Wallet
+											{% elif item.exchange == 'kraken_spot' %}Kraken Spot
+											{% elif item.exchange == 'kraken_futures' %}Kraken Futures
+											{% elif item.exchange == 'bingx_spot' %}BingX Spot
+											{% elif item.exchange == 'bingx_futures' %}BingX Futures
+											{% else %}{{ item.exchange }}{% endif %}
+										</span>
+									</td>
+									<td>{{ item.currency }}</td>
+									<td>{{ "%.6f"|format(item.amount) }}</td>
+								</tr>
+								{% endfor %}
 								{% else %}
-									<tr>
-										<td colspan="3">No balances found</td>
-									</tr>
+								<tr>
+									<td colspan="3">No balances found</td>
+								</tr>
 								{% endif %}
 							</tbody>
 						</table>
@@ -96,18 +97,21 @@
 						<button type="button" class="btn btn-secondary" id="toggleAllBalances" style="margin-right: 1rem;">
 							Show All Balances
 						</button>
-						
-						<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal" id="fund_wallet_button" {{ "disabled" if pending_balance > 0 else "" }}>
+
+						<button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal"
+							id="fund_wallet_button" {{ "disabled" if pending_balance> 0 else "" }}>
 							Fund wallet
 						</button>
-						
+
 						<span id="withdrawal_button_container">
-							<button type="button" class="btn btn-success ms-2" data-bs-toggle="modal" data-bs-target="#withdrawalModal" id="withdrawal_button" {{ "disabled" if disabled_withdraw or pending_withdrawal_balance or pending_balance else "" }}>
+							<button type="button" class="btn btn-success ms-2" data-bs-toggle="modal"
+								data-bs-target="#withdrawalModal" id="withdrawal_button" {{ "disabled" if disabled_withdraw or
+								pending_withdrawal_balance or pending_balance else "" }}>
 								Withdraw
 							</button>
 						</span>
 					</div>
-						
+
 					<p>Console Log: Wallet Balance and Fund Wallet</p>
 				</div>
 			</div>
@@ -177,7 +181,8 @@
 			</div>
 		</div>
 		<div class="col-md-3">
-			<div class="card {% if performance.net_performance >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white mb-3">
+			<div
+				class="card {% if performance.net_performance >= 0 %}bg-success{% else %}bg-danger{% endif %} text-white mb-3">
 				<div class="card-body">
 					<h5 class="card-title">Net Performance</h5>
 					<h3>{{ "%.6f"|format(performance.net_performance) }} USDT</h3>
@@ -222,9 +227,18 @@
 					<canvas id="earningsChartCircle" width="200" height="100"></canvas>
 				</div>
 			</div>
+
+			<section id="chart-section">
+				<div id="chart"></div>
+				<div id="chart-buttons">
+					<button data-type="all" class="btn btn-secondary bg-primary">All</button>
+					<button data-type="spot" class="btn btn-secondary">Spot</button>
+					<button data-type="swap" class="btn btn-secondary">Swap</button>
+				</div>
+			</section>
 		</div>
 	</center>
-		
+
 </div>
 
 <!-- Fund Modal -->
@@ -271,11 +285,11 @@
 					<label for="withdrawalSymbol">Currency:</label>
 					<select class="form-control" id="withdrawalSymbol">
 						{% if balance_general %}
-							{% for item in balance_general %}
-								<option value="{{ item.currency }}">{{ item.currency }}</option>
-							{% endfor %}
+						{% for item in balance_general %}
+						<option value="{{ item.currency }}">{{ item.currency }}</option>
+						{% endfor %}
 						{% else %}
-							<option value="USDT">USDT</option>
+						<option value="USDT">USDT</option>
 						{% endif %}
 					</select>
 					<label for="withdrawalAddress">Wallet Address:</label>
@@ -301,14 +315,14 @@
 
 <script>
 	// Balance data from server
-	const balanceData = {{ balance|tojson|safe }};
+	const balanceData = {{ balance| tojson | safe }};
 	let showingAllBalances = false;
 
 	// Function to update individual balance display
 	function updateIndividualBalance(currency) {
 		const balanceItem = balanceData.find(item => item.currency === currency && item.exchange === "general");
 		const balanceElement = document.getElementById('balanceAmount');
-		
+
 		if (balanceItem) {
 			balanceElement.textContent = `${balanceItem.amount.toFixed(5)}`;
 		} else {
@@ -361,70 +375,60 @@
 		});
 	}
 
-	// Event listeners
-	document.addEventListener("DOMContentLoaded", function () {
-		// Currency selector change event
-		const currencySelect = document.getElementById('currencySelect');
-		currencySelect.addEventListener('change', function() {
-			updateIndividualBalance(this.value);
-		});
+	let barChart = null;
+	let pieChart = null;
 
-		// Toggle button click event
-		const toggleButton = document.getElementById('toggleAllBalances');
-		toggleButton.addEventListener('click', toggleAllBalances);
+	const ctx = document.getElementById("earningsChart");
+	const ctxCircle = document.getElementById("earningsChartCircle");
 
-		// Exchange filter change event
-		const exchangeFilter = document.getElementById('exchangeFilter');
-		exchangeFilter.addEventListener('change', filterBalancesByExchange);
+	const load_charts = (market_type) => {
+		fetch(`/api/wallet/chart-data?market_type=${market_type ?? "all"}`)
+			.then(response => response.json())
+			.then(data => {
+				if (data.success) {
+					const money = data.data.datasets[0].data;
+					const labels = data.data.labels;
+					let totalProfit = 0;
+					let totalLost = 0;
 
-		// Initialize with first currency
-		if (balanceData && balanceData.length > 0) {
-			updateIndividualBalance(balanceData[0].currency);
-		}
+					const combinedData = labels.map((label, index) => {
+						const result = { label };
+						if (money[index] >= 0) {
+							result.earnings = money[index];
+							totalProfit += money[index];
+						} else {
+							result.losses = money[index];
+							totalLost += money[index];
+						}
+						return result;
+					});
 
-		// Load funding transactions by exchange
-		// loadTransactionsByExchange();
+					const total = (totalProfit + Math.abs(totalLost));
+					const percentageProfit = total > 0 ? (totalProfit / total * 100) : 0;
+					const percentageLost = total > 0 ? (Math.abs(totalLost) / total * 100) : 0;
 
-		// Chart.js code - fetch data from API
-		const ctx = document.getElementById("earningsChart");
-		const ctxCircle = document.getElementById("earningsChartCircle");
-		if (ctx) {
-			// Fetch chart data from the API
-			fetch('/api/wallet/chart-data')
-				.then(response => response.json())
-				.then(data => {
-					if (data.success) {
-						const money = data.data.datasets[0].data;
-						const labels = data.data.labels;
-						let totalProfit = 0;
-						let totalLost = 0;
-
-						const combinedData = labels.map((label, index) => {
-							const result = {label};
-							result[money[index] >= 0?"earnings":"losses"] = money[index];
-							money[index] >= 0?totalProfit+=money[index]:totalLost+=money[index]
-
-							return result;
-						});
-
-						const total = (totalProfit + Math.abs(totalLost));
-						const percentageProfit = totalProfit / total * 100;
-						const percentageLost = totalLost / total * 100;
-
-						new Chart(ctx.getContext("2d"), {
+					// Actualizar gráfico de barras si existe
+					if (barChart) {
+						barChart.data.labels = labels;
+						barChart.data.datasets[0].data = combinedData.map(item => item.earnings || 0);
+						barChart.data.datasets[1].data = combinedData.map(item => Math.abs(item.losses) || 0);
+						barChart.update();
+					} else {
+						// Crear nuevo gráfico de barras si no existe
+						barChart = new Chart(ctx.getContext("2d"), {
 							type: 'bar',
 							data: {
 								labels: labels,
 								datasets: [{
 									label: 'Earnings',
-									data: combinedData.map(item => item.earnings),
+									data: combinedData.map(item => item.earnings || 0),
 									backgroundColor: 'rgb(75, 192, 192)',
 									borderColor: 'rgb(75, 192, 192)',
 									borderWidth: 1
 								},
 								{
 									label: 'Losses',
-									data: combinedData.map(item => Math.abs(item.losses)),
+									data: combinedData.map(item => Math.abs(item.losses) || 0),
 									backgroundColor: 'rgb(255, 99, 132)',
 									borderColor: 'rgb(255, 99, 132)',
 									borderWidth: 1
@@ -436,7 +440,7 @@
 									y: {
 										beginAtZero: false,
 										ticks: {
-											callback: function(value) {
+											callback: function (value) {
 												return '$' + value.toFixed(4);
 											}
 										},
@@ -457,8 +461,15 @@
 								}
 							}
 						});
+					}
 
-						new Chart(ctxCircle, {
+					// Actualizar gráfico circular si existe
+					if (pieChart) {
+						pieChart.data.datasets[0].data = [percentageProfit, percentageLost];
+						pieChart.update();
+					} else {
+						// Crear nuevo gráfico circular si no existe
+						pieChart = new Chart(ctxCircle, {
 							type: 'pie',
 							data: {
 								labels: [
@@ -473,28 +484,83 @@
 									],
 									hoverOffset: 4
 								}]
-						},
+							},
+							options: {
+								plugins: {
+									tooltip: {
+										callbacks: {
+											label: function (context) {
+												return `${context.label}: ${context.raw.toFixed(2)}%`;
+											}
+										}
+									}
+								}
+							}
 						});
-					} else {
-						console.error('Error loading chart data:', data.error);
 					}
-				})
-				.catch(error => {
-					console.error('Error fetching chart data:', error);
-				});
+				} else {
+					console.error('Error loading chart data:', data.error);
+				}
+			})
+			.catch(error => {
+				console.error('Error fetching chart data:', error);
+			});
+	}
+
+	const updateActiveButton = (selectedType) => {
+		document.querySelectorAll("#chart-buttons button").forEach(btn => {
+			if (btn.getAttribute("data-type") === selectedType) {
+				btn.classList.add("bg-primary");
+			} else {
+				btn.classList.remove("bg-primary");
+			}
+		});
+	}
+
+	document.getElementById('chart-buttons').addEventListener('click', function (e) {
+		if (e.target && e.target.tagName === 'BUTTON') {
+			const marketType = e.target.getAttribute('data-type');
+			updateActiveButton(marketType);
+			load_charts(marketType);
+		}
+	});
+
+	// Event listeners
+	document.addEventListener("DOMContentLoaded", function () {
+		// Currency selector change event
+		const currencySelect = document.getElementById('currencySelect');
+		currencySelect.addEventListener('change', function () {
+			updateIndividualBalance(this.value);
+		});
+
+		// Toggle button click event
+		const toggleButton = document.getElementById('toggleAllBalances');
+		toggleButton.addEventListener('click', toggleAllBalances);
+
+		// Exchange filter change event
+		const exchangeFilter = document.getElementById('exchangeFilter');
+		exchangeFilter.addEventListener('change', filterBalancesByExchange);
+
+		// Initialize with first currency
+		if (balanceData && balanceData.length > 0) {
+			updateIndividualBalance("USDT");
 		}
 
+		// Load funding transactions by exchange
+		// loadTransactionsByExchange();
 
+		// Chart.js code - fetch data from API
+		load_charts("all");
 
 		const bnt_withdrawal = document.getElementById('withdrawal_button_container');
 
 		bnt_withdrawal.addEventListener("click", () => {
-			if(!document.getElementById('withdrawal_button').disabled) return
+			if (!document.getElementById('withdrawal_button').disabled) return
 
 			{% if disabled_withdraw %}
-				const msg = "You can only withdraw 15 days after a deposit"
+			const msg = "You can only withdraw 15 days after a deposit"
 			{% else %}
-				const msg = "You have a pending recall order"
+			const msg = "You have a pending recall order"
 			{% endif %}
 
 			alert(msg);
@@ -504,14 +570,14 @@
 	// Function to display transactions grouped by exchange
 	function displayTransactionsByExchange(transactionsByExchange) {
 		const container = document.getElementById('transactionsByExchange');
-		
+
 		if (!transactionsByExchange || Object.keys(transactionsByExchange).length === 0) {
 			container.innerHTML = '<div class="alert alert-info">No funding transactions found</div>';
 			return;
 		}
 
 		let html = '';
-		
+
 		// Exchange display names
 		const exchangeNames = {
 			'general': 'General Wallet',
@@ -533,7 +599,7 @@
 		for (const [exchange, transactions] of Object.entries(transactionsByExchange)) {
 			const exchangeName = exchangeNames[exchange] || exchange;
 			const exchangeColor = exchangeColors[exchange] || 'bg-secondary';
-			
+
 			html += `
 				<div class="mb-4">
 					<h6 class="mb-3">
@@ -603,26 +669,26 @@
 			method: 'POST',
 			body: formData
 		})
-		.then(response => response.json())
-		.then(data => {
-			if (data.success) {
-				alert('Transaction submitted successfully!');
-				// Close modal
-				const modal = bootstrap.Modal.getInstance(document.getElementById('exampleModal'));
-				if (modal) {
-					modal.hide();
-				}
+			.then(response => response.json())
+			.then(data => {
+				if (data.success) {
+					alert('Transaction submitted successfully!');
+					// Close modal
+					const modal = bootstrap.Modal.getInstance(document.getElementById('exampleModal'));
+					if (modal) {
+						modal.hide();
+					}
 
-				document.getElementById('withdrawal_button').disabled = true;
-				document.getElementById('fund_wallet_button').disabled = true;
-			} else {
-				alert('Error: ' + (data.error || 'Failed to submit transaction'));
-			}
-		})
-		.catch(error => {
-			console.error('Error:', error);
-			alert('Error submitting transaction. Please try again.');
-		});
+					document.getElementById('withdrawal_button').disabled = true;
+					document.getElementById('fund_wallet_button').disabled = true;
+				} else {
+					alert('Error: ' + (data.error || 'Failed to submit transaction'));
+				}
+			})
+			.catch(error => {
+				console.error('Error:', error);
+				alert('Error submitting transaction. Please try again.');
+			});
 	}
 
 	document.getElementById('submitTransaction').addEventListener('click', submitTransaction);
@@ -654,36 +720,36 @@
 			method: 'POST',
 			body: formData
 		})
-		.then(response => response.json())
-		.then(data => {
-			if (data.success) {
-				alert('Withdrawal request submitted successfully!');
-				// Close modal
-				const modal = bootstrap.Modal.getInstance(document.getElementById('withdrawalModal'));
-				if (modal) {
-					modal.hide();
-				}
-				// Reload history
-				loadTransactionHistory();
-
-				document.getElementById('withdrawal_button').disabled = true;
-			} else {
-				if (data.withdrawal_locked) {
-					alert('Withdrawals are only allowed 15 days after your last deposit or withdrawal. Please wait ' + data.days_remaining + ' more day(s).');
+			.then(response => response.json())
+			.then(data => {
+				if (data.success) {
+					alert('Withdrawal request submitted successfully!');
+					// Close modal
+					const modal = bootstrap.Modal.getInstance(document.getElementById('withdrawalModal'));
+					if (modal) {
+						modal.hide();
+					}
+					// Reload history
+					loadTransactionHistory();
 
 					document.getElementById('withdrawal_button').disabled = true;
+				} else {
+					if (data.withdrawal_locked) {
+						alert('Withdrawals are only allowed 15 days after your last deposit or withdrawal. Please wait ' + data.days_remaining + ' more day(s).');
+
+						document.getElementById('withdrawal_button').disabled = true;
+					}
+					else {
+						alert('Error: ' + (data.error || 'Failed to submit withdrawal request'));
+					}
+					btnSubmitWithdrawal.disabled = false;
 				}
-				else {
-					alert('Error: ' + (data.error || 'Failed to submit withdrawal request'));
-				}
+			})
+			.catch(error => {
+				console.error('Error:', error);
+				alert('Error submitting withdrawal request. Please try again.');
 				btnSubmitWithdrawal.disabled = false;
-			}
-		})
-		.catch(error => {
-			console.error('Error:', error);
-			alert('Error submitting withdrawal request. Please try again.');
-			btnSubmitWithdrawal.disabled = false;
-		});
+			});
 	}
 
 	document.getElementById('submitWithdrawal').addEventListener('click', submitWithdrawal);
@@ -692,7 +758,7 @@
 	let currentPage = 1;
 	let totalPages = 1;
 
-	const loadTransactionHistory = async(page = 1) => {
+	const loadTransactionHistory = async (page = 1) => {
 		const container = document.getElementById('transactionHistoryContainer');
 		container.innerHTML = `
 		<div class="text-center py-4">
@@ -702,7 +768,7 @@
 			<p class="mt-2">Loading transaction history...</p>
 		</div>
 		`;
-		
+
 		try {
 			const response = await fetch(`/get_transaction_history?page=${page}&per_page=10`, {
 				method: 'GET',
@@ -710,13 +776,13 @@
 					'Content-Type': 'application/json',
 				}
 			});
-			
+
 			if (!response.ok) {
 				throw new Error(`HTTP error! status: ${response.status}`);
 			}
-			
+
 			const data = await response.json();
-			
+
 			if (data.success) {
 				currentPage = data.pagination.current_page;
 				totalPages = data.pagination.total_pages;
@@ -724,7 +790,7 @@
 			} else {
 				throw new Error(data.error || 'Failed to load transaction history');
 			}
-			
+
 		} catch (error) {
 			console.error('Error loading transaction history:', error);
 			container.innerHTML = `
@@ -737,7 +803,7 @@
 
 	const renderTransactionHistory = (transactions, pagination) => {
 		const container = document.getElementById('transactionHistoryContainer');
-		
+
 		if (!transactions || transactions.length === 0) {
 			container.innerHTML = `
 				<div class="text-center py-4">
@@ -771,7 +837,7 @@
 			const amountPrefix = isDeposit ? '+' : '-';
 			const typeIcon = isDeposit ? 'fa-arrow-down' : 'fa-arrow-up';
 			const typeClass = isDeposit ? 'text-success' : 'text-danger';
-			
+
 			// Status styling
 			let statusClass, statusIcon;
 			if (transaction.status === 'Verified' || transaction.status === 'Processed') {
@@ -781,7 +847,7 @@
 				statusClass = 'text-warning';
 				statusIcon = 'fa-clock';
 			}
-			
+
 			html += `
 				<tr>
 					<td>${transaction.formatted_time}</td>
@@ -799,7 +865,7 @@
 					</td>
 					<td>
 			`;
-			
+
 			if (transaction.tx_hash) {
 				html += `
 					<span onclick="copyToClipboard('${transaction.tx_hash}')" title="Click to copy TX Hash">
@@ -809,7 +875,7 @@
 			} else {
 				html += `<span class="text-muted text-sm">-</span>`;
 			}
-			
+
 			html += `
 					</td>
 				</tr>
@@ -927,7 +993,7 @@
 			alert('TX Hash copied to clipboard!');
 		});
 	}
-	
+
 	// Load transaction history when page loads
 	loadTransactionHistory(1);
 </script>

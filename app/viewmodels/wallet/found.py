@@ -225,7 +225,7 @@ class Wallet:
                 "net_performance": 0
             }
 
-    def get_chart_data(self, days: int = 30):
+    def get_chart_data(self, days: int = 30, market_type: str = "all"):
         balances = get_all_balance_blocked(self.user_id, days)
         labels = []
         data = []
@@ -233,6 +233,9 @@ class Wallet:
         position_trades = {}
 
         for balance in balances:
+            if market_type != "all" and balance.market_type != market_type:
+                continue
+
             symbol = balance.currency
             amount_usdt = balance.amount_usdt
             balance_date = balance.fecha.strftime('%Y-%m-%d')
@@ -393,8 +396,8 @@ class Wallet:
 
         return (balance - blocked_balance)
 
-    def add_blocked_balance(self, amount_usdt: float, amount_crypto: float, currency: str, by_bot: str, order: str, exchange: str = "general"):
-        return add_quantity_to_block(self.user_id, amount_usdt, amount_crypto, currency, by_bot, order, exchange)
+    def add_blocked_balance(self, amount_usdt: float, amount_crypto: float, currency: str, by_bot: str, order: str, exchange: str = "general", market_type: str = "swap"):
+        return add_quantity_to_block(self.user_id, amount_usdt, amount_crypto, currency, by_bot, order, exchange, market_type)
 
     def get_blocked_balance(self, currency, by_bot: str, exchange: str = "general", finished: bool = False) -> dict:
         return get_blocked_quantity(self.user_id, currency, by_bot, exchange, finished)

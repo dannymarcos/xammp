@@ -4,7 +4,7 @@ from app.iu.routes.utils.utils import get_translated_text
 from app.models.users import get_referred_by_user
 from app.viewmodels.wallet.found import Wallet, WalletAdmin
 from app.models.transaction_wallet import FoundWallet
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 import logging
 
 wallet_bp = Blueprint('wallet', __name__)
@@ -40,10 +40,13 @@ def withdrawal_period_active(last_verified):
     if last_verified:
         now = datetime.now(timezone.utc)
 
-        if last_verified.tzinfo is None:
-            last_verified_utc = last_verified.replace(tzinfo=timezone.utc)
+        if isinstance(last_verified, date) and not isinstance(last_verified, datetime):
+            last_verified_utc = datetime.combine(last_verified, datetime.min.time()).replace(tzinfo=timezone.utc)
         else:
-            last_verified_utc = last_verified.astimezone(timezone.utc)
+            if last_verified.tzinfo is None:
+                last_verified_utc = last_verified.replace(tzinfo=timezone.utc)
+            else:
+                last_verified_utc = last_verified.astimezone(timezone.utc)
 
         days_since = (now - last_verified_utc).days
 
@@ -329,10 +332,11 @@ def get_wallet_chart_data():
     try:
         user_id = current_user.id
         wallet = Wallet(user_id)
-        
+        market_type = request.args.get("market_type", "all")
+
         # Get chart data from wallet class
-        chart_data_raw = wallet.get_chart_data(days=30)
-        
+        chart_data_raw = wallet.get_chart_data(30, market_type)
+
         # Format data for Chart.js
         chart_data = {
             "labels": chart_data_raw["labels"],
