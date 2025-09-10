@@ -203,9 +203,10 @@ def withdrawal_request():
         gain_part = min(amount, available_gain)
         capital_part = amount - gain_part
 
-    platform_comision = gain_part * 0.15
+    # platform_comision = gain_part * 0.15
     ref_comision = gain_part * 0.05 if referred_by_user else 0.0
-    total_comision = platform_comision + ref_comision
+    # total_comision = platform_comision + ref_comision
+    total_comision = 1.5 + ref_comision
 
     net_amount = amount - total_comision
 
@@ -226,6 +227,7 @@ def withdrawal_request():
     
     # Registrar movimiento en fondos
     try:
+        print("AEGIS ha ganado $1.5")
         admin_wallet.add_found(user_id, -amount, symbol, "general")
     except Exception as e:
         print(f"Error updating funds: {e}")
@@ -233,12 +235,12 @@ def withdrawal_request():
         db.session.rollback()
         return jsonify({"success": False, "error": "Failed to update funds"})
 
-    # Registrar comisiones solo si hay ganancias
-    if platform_comision > 0:
-        try:
-            admin_wallet.update_performance_aegis(platform_comision)
-        except Exception as e:
-            print(f"Error updating platform commission: {e}")
+    # Registrar comisiones
+    # if platform_comision > 0:
+    try:
+        admin_wallet.update_performance_aegis(1.5)
+    except Exception as e:
+        print(f"Error updating platform commission: {e}")
     
     if ref_comision > 0 and referred_by_user:
         try:

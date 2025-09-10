@@ -806,7 +806,7 @@ class WalletAdmin:
         try:
             performance = PerformanceAegis.query.get(1)
             if performance:
-                performance.amount = amount
+                performance.amount += amount
                 performance.date = datetime.utcnow()
                 performance.update()
                 print(f"✅ Updated PerformanceAegis (ID: 1) to amount: {amount}")
