@@ -1,8 +1,10 @@
-from flask import Blueprint, render_template, session, redirect, url_for
+from flask import Blueprint, render_template, session, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 import logging
 
 from app.iu.routes.utils.utils import get_translated_text
+from app.models.users import User # Import User model for the test
+from app.models.create_db import db # Import db for the test
 
 home_bp = Blueprint('home', __name__)
 logger = logging.getLogger(__name__)

@@ -40,6 +40,11 @@ class Application:
         self.login_manager.login_view = 'auth.login'
         self._register_user_loader() # Register the user loader callback
 
+        # Register the teardown function to close DB sessions
+        @self.app.teardown_appcontext
+        def shutdown_session(exception=None):
+            db.session.remove()
+
         self.init_db()
         self._register_error_handlers()  # Register error handlers
 

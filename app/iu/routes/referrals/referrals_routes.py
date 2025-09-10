@@ -41,7 +41,7 @@ def get_referral_link():
         referral_code = user.id
         
         base_url = request.host_url.rstrip('/')
-        referral_url = f"{base_url}/register?ref={referral_code}"
+        referral_url = f"{base_url}:8080/register?ref={referral_code}"
         
         return jsonify({
             "status": "success",
